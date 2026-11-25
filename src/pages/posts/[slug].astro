@@ -1,0 +1,7 @@
+---
+import PostPage from '../../components/PostPage.astro';
+import { posts, postPaths } from '../../lib/journal.ts';
+
+export function getStaticPaths() { return postPaths(posts); }
+---
+<PostPage {...Astro.props} />

@@ -1,0 +1,61 @@
+---
+import '../styles/site.css';
+import { notebooks, tags } from '../lib/journal.ts';
+import NavIcon from '../components/NavIcon.astro';
+import SiteSearch from '../components/SiteSearch.astro';
+import Landscape from '../components/Landscape.astro';
+import theme from '../../theme.config.mjs';
+
+interface Props {
+  title?: string;
+  active?: 'posts' | 'archives' | 'categories' | 'diary' | 'tags';
+  home?: boolean;
+  heading?: string;
+}
+const { title, active, home = false, heading = title ?? theme.title } = Astro.props;
+const navigation = [
+  { key: 'posts', name: '首页', url: '/' },
+  { key: 'archives', name: '归档', url: '/archives/' },
+  ...(notebooks.size ? [{ key: 'categories' as const, name: '分类', url: '/categories/' }] : []),
+  ...(theme.services ? [{ key: 'diary' as const, name: '日记', url: '/diary/' }] : []),
+  ...(tags.length ? [{ key: 'tags' as const, name: '标签', url: '/tags/' }] : []),
+] as const;
+---
+<!doctype html>
+<html lang="zh-CN" style={{ '--accent': theme.accent }}>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#233e47" />
+    {theme.description && <meta name="description" content={theme.description} />}
+    {Astro.site && <link rel="canonical" href={new URL(Astro.url.pathname, Astro.site)} />}
+    <title>{title ? title + ' · ' + theme.title : theme.title}</title>
+  </head>
+  <body class="field-paper">
+    <a class="skip" href="#main">跳到正文</a>
+    <header class:list={['masthead', { 'masthead-home': home }]} id="top">
+      <Landscape />
+      <div class="topbar">
+        <a class="brand" href="/" aria-label={theme.title + '首页'}><span class="book-mark" aria-hidden="true"></span>{theme.title}</a>
+        <nav class="site-nav" aria-label="主导航">
+          <button type="button" data-open-search aria-haspopup="dialog" aria-controls="site-search-dialog"
+            aria-keyshortcuts="Meta+K Control+K" hidden><NavIcon name="search" />搜索</button>
+          {navigation.map(item => <a href={item.url} aria-current={active === item.key ? 'page' : undefined}><NavIcon name={item.key} />{item.name}</a>)}
+          {theme.services && <a href="/account/" data-account-link>
+            <img data-account-avatar width="24" height="24" alt="" hidden /><NavIcon name="account" /><span>登录 / 注册</span>
+          </a>}
+        </nav>
+      </div>
+      <div class="hero-copy">
+        <h1>{heading}</h1>
+        <slot name="hero-meta"/>
+      </div>
+      {home && <a class="browse" href="#main">浏览文章</a>}
+    </header>
+    <SiteSearch />
+    <slot />
+    <footer class="site-footer">
+      <div class="frame"><a href="/" class="footer-brand"><span class="book-mark" aria-hidden="true"></span>{theme.title}</a><a href="#top">回到顶部</a></div>
+    </footer>
+  </body>
+</html>

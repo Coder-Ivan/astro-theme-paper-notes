@@ -1,0 +1,74 @@
+---
+import 'katex/dist/katex.min.css';
+import Shell from '../layouts/Shell.astro';
+import theme from '../../theme.config.mjs';
+import PostMeta from './PostMeta.astro';
+import Sidebar from './Sidebar.astro';
+import PostComments from './PostComments.astro';
+import ArticleOutline from './ArticleOutline.astro';
+import '../styles/article-outline.css';
+import { isDiary, postUrl, type JournalPost } from '../lib/journal.ts';
+import { diaryDate } from '../lib/diary.ts';
+
+interface Props {
+  post: JournalPost;
+  older?: JournalPost;
+  newer?: JournalPost;
+}
+const { post, older, newer } = Astro.props;
+const diary = isDiary(post);
+const day = diary ? diaryDate(post) : '';
+const calendarUrl = day ? '/diary/#day-' + day : '/diary/';
+const next = older || newer;
+const hasOutline = post.headings.length > 0;
+---
+<Shell title={post.title} active={diary ? 'diary' : undefined}>
+  <div slot="hero-meta">
+    {diary ? <div class="meta">
+      {day && !post.title.includes(day) && <time datetime={day}>{day}</time>}
+      <a href={calendarUrl}>返回日历</a>
+    </div> : <PostMeta post={post} />}
+  </div>
+  <main id="main" class:list={['frame', diary && !hasOutline ? 'diary-reader' : 'columns article-frame',
+    {'with-outline': hasOutline, 'diary-outline': diary && hasOutline}]}>
+    {hasOutline && <ArticleOutline headings={post.headings} />}
+    <div class="post-reading-column">
+      <article class="panel article">
+        <div class="prose" set:html={post.html}></div>
+        {diary && !post.body.trim() && <p class="empty-diary">这篇日记只有标题。</p>}
+        {diary && (older || newer) && <nav class="diary-entry-nav" aria-label="日记翻页">
+          {older && <a href={postUrl(older)}><small>上一篇日记</small>{older.title}</a>}
+          {newer && <a class="newer" href={postUrl(newer)}><small>下一篇日记</small>{newer.title}</a>}
+        </nav>}
+        {!diary && next && <aside class="next-post"><span>继续阅读</span><a href={postUrl(next)}>{next.title}</a></aside>}
+      </article>
+      {theme.services && <PostComments slug={post.slug} diary={diary} />}
+    </div>
+    {!diary && <Sidebar post={post}/>}
+  </main>
+  <script is:inline>
+    const prose = document.querySelector('.prose');
+    function showImageLink(img) {
+      if (!(img instanceof HTMLImageElement) || !/^https?:$/.test(new URL(img.src).protocol)) return;
+      const wrapper = img.parentElement.closest('a');
+      const fallback = document.createElement(wrapper ? 'span' : 'a');
+      fallback.className = 'missing-illustration';
+      if (!wrapper) fallback.href = img.src;
+      fallback.textContent = (img.alt || '文章配图') + '（查看图片）';
+      img.replaceWith(fallback);
+    }
+    prose.addEventListener('error', event => showImageLink(event.target), true);
+    for (const img of prose.querySelectorAll('img')) {
+      if (img.complete && img.naturalWidth === 0) showImageLink(img);
+    }
+  </script>
+  {post.hasMermaid && <>
+    <script src="/assets/mermaid.min.js" is:inline></script>
+    <script is:inline>
+      if (window.mermaid) {
+        window.mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', theme: 'neutral' });
+        window.mermaid.run({ querySelector: '.mermaid' }).catch(console.error);
+      }
+    </script>
+  </>}
+</Shell>

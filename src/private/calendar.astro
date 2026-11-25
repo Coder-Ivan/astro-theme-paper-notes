@@ -1,0 +1,210 @@
+---
+import Shell from '../layouts/Shell.astro';
+import { diaryDays, undatedEntries, diaryCount } from '../lib/diary.ts';
+import { dayOfWeek, monthLabel, weeksOfMonth } from '../components/diary-calendar.ts';
+import '../styles/diary.css';
+
+const latest = diaryDays[0]?.date;
+const initialMonth = latest?.slice(0, 7);
+const counts = new Map(diaryDays.map(day => [day.date, day.entries.length] as const));
+const months = new Map<string, number>();
+for (const day of diaryDays) {
+  const month = day.date.slice(0, 7);
+  months.set(month, (months.get(month) || 0) + day.entries.length);
+}
+---
+<Shell title="日记" active="diary">
+  <p slot="hero-meta" class="hero-meta">记录了 {diaryDays.length} 天<span aria-hidden="true">/</span>共 {diaryCount} 篇日记</p>
+  <main id="main" class="frame diary-page">
+    {initialMonth && <div id="diary-browser" class="diary-layout">
+      <section class="panel diary-calendar" id="calendar" aria-label="日记日历">
+        <div class="diary-toolbar">
+          <h2 id="diary-month">{monthLabel(initialMonth)}</h2>
+          <div class="diary-controls" data-enhance hidden>
+            <button type="button" data-shift="-1" aria-label="上个月">上月</button>
+            <button type="button" id="diary-today">今天</button>
+            <button type="button" data-shift="1" aria-label="下个月">下月</button>
+          </div>
+        </div>
+        <table class="diary-grid" aria-labelledby="diary-month">
+          <thead><tr>{['一','二','三','四','五','六','日'].map(name =>
+            <th scope="col"><span aria-hidden="true">{name}</span><span class="diary-sr">星期{name}</span></th>)}</tr></thead>
+          <tbody id="diary-grid-body">{weeksOfMonth(initialMonth).map(week =>
+            <tr>{week.map(date => <td>{date && (counts.has(date)
+              ? <a class="diary-cell has-entry" href={'#day-' + date} aria-label={date + '，' + counts.get(date) + ' 篇日记'}>{Number(date.slice(8))}</a>
+              : <span class="diary-cell">{Number(date.slice(8))}</span>)}</td>)}</tr>)}</tbody>
+        </table>
+        <div class="diary-calendar-foot">
+          <span class="diary-legend"><i aria-hidden="true"></i>有日记<span id="diary-month-count">本月 {months.get(initialMonth)} 篇</span></span>
+          <select id="diary-month-jump" aria-label="跳至有日记的月份" data-enhance hidden>
+            <option value="">有日记的月份</option>
+            {[...months].map(([month, count]) => <option value={month}>{monthLabel(month)} · {count} 篇</option>)}
+          </select>
+        </div>
+      </section>
+      <section id="diary-reading" class="panel diary-reading" aria-labelledby="diary-reading-title">
+        <div class="diary-reading-head">
+          <p id="diary-reading-year" data-enhance hidden></p>
+          <h2 id="diary-reading-title" tabindex="-1">按日阅读</h2>
+          <a class="diary-back" href="#calendar" data-enhance hidden>返回日历</a>
+        </div>
+        <div id="diary-records">
+          {diaryDays.map(day => <section id={'day-' + day.date} class="diary-day-record" data-date={day.date}>
+            <h3 class="diary-fallback-date"><time datetime={day.date}>{day.date} · {dayOfWeek(day.date)}</time></h3>
+            <ul>{day.entries.map(entry => <li>
+              <a class="diary-entry-title" href={entry.url}>{entry.title}</a>
+              {entry.titleOnly ? <p class="diary-title-only">这篇日记只有标题。</p>
+                : entry.excerpt && entry.excerpt !== entry.title && <p>{entry.excerpt}</p>}
+            </li>)}</ul>
+          </section>)}
+        </div>
+        <p class="diary-empty-day" id="diary-empty" hidden>当天没有日记。</p>
+        <nav class="diary-neighbors" aria-label="相邻记录日" data-enhance hidden>
+          <button type="button" id="diary-earlier">上一个记录日</button>
+          <button type="button" id="diary-later">下一个记录日</button>
+        </nav>
+        <p class="diary-sr" id="diary-announcement" aria-live="polite" aria-atomic="true"></p>
+      </section>
+    </div>}
+    {!diaryCount && <p class="panel diary-blank">暂无日记。</p>}
+    {undatedEntries.length > 0 && <section class="panel diary-undated">
+      <h2>未标注日期的日记</h2>
+      <ul>{undatedEntries.map(entry => <li><a href={entry.url}>{entry.title}</a></li>)}</ul>
+    </section>}
+  </main>
+</Shell>
+<script>
+  import { adjacentMonth, dayOfWeek, isDateKey, monthLabel, shortDate, weeksOfMonth } from '../components/diary-calendar.ts';
+
+  function activateCalendar(root: HTMLElement) {
+    function get<T extends HTMLElement>(selector: string) { return root.querySelector<T>(selector)!; }
+    const body = get<HTMLTableSectionElement>('#diary-grid-body');
+    const jump = get<HTMLSelectElement>('#diary-month-jump');
+    const earlier = get<HTMLButtonElement>('#diary-earlier');
+    const later = get<HTMLButtonElement>('#diary-later');
+    const monthHeading = get('#diary-month');
+    const records = new Map(Array.from(root.querySelectorAll<HTMLElement>('[data-date]'), el =>
+      [el.dataset.date!, { el, count: el.querySelectorAll('li').length }] as const));
+    const dates = [...records.keys()].sort();
+    const monthCounts = new Map<string, number>();
+    for (const [date, record] of records) {
+      const month = date.slice(0, 7);
+      monthCounts.set(month, (monthCounts.get(month) || 0) + record.count);
+    }
+    const newest = dates[dates.length - 1];
+    function todayInShanghai() {
+      const parts = new Intl.DateTimeFormat('en', {year:'numeric', month:'2-digit', day:'2-digit', timeZone:'Asia/Shanghai'}).formatToParts(new Date());
+      const part = (type: string) => parts.find(p => p.type === type)!.value;
+      return part('year') + '-' + part('month') + '-' + part('day');
+    }
+    const dateInMonth = (month: string) => dates.filter(d => d.startsWith(month + '-')).at(-1) || month + '-01';
+    let selected = newest;
+    let earlierDate: string | undefined;
+    let laterDate: string | undefined;
+
+    function render(date: string, announce = true) {
+      selected = date;
+      const month = date.slice(0, 7);
+      monthHeading.textContent = monthLabel(month);
+      const today = todayInShanghai();
+      const rows = weeksOfMonth(month).map(week => {
+        const row = document.createElement('tr');
+        for (const key of week) {
+          const cell = row.insertCell();
+          if (!key) continue;
+          const count = records.get(key)?.count || 0;
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = count ? 'diary-cell has-entry' : 'diary-cell';
+          button.textContent = String(Number(key.slice(8)));
+          button.dataset.key = key;
+          button.tabIndex = key === date ? 0 : -1;
+          button.setAttribute('aria-pressed', String(key === date));
+          button.setAttribute('aria-controls','diary-reading');
+          button.setAttribute('aria-label', key + '，' + (count ? count + ' 篇日记' : '无日记'));
+          if (key === today) button.setAttribute('aria-current','date');
+          cell.append(button);
+        }
+        return row;
+      });
+      body.replaceChildren(...rows);
+      const count = records.get(date)?.count || 0;
+      for (const [key, record] of records) record.el.hidden = key !== date;
+      get('#diary-empty').hidden = !!count;
+      get('#diary-reading-year').textContent = date.slice(0, 4) + ' 年 · ' + dayOfWeek(date);
+      get('#diary-reading-title').textContent = shortDate(date);
+      get('#diary-month-count').textContent = '本月 ' + (monthCounts.get(month) || 0) + ' 篇';
+      jump.value = monthCounts.has(month) ? month : '';
+      earlierDate = dates.filter(d => d < date).at(-1);
+      laterDate = dates.find(d => d > date);
+      earlier.disabled = !earlierDate;
+      later.disabled = !laterDate;
+      for (const button of root.querySelectorAll<HTMLButtonElement>('[data-shift]')) button.disabled = !adjacentMonth(month, Number(button.dataset.shift));
+      if (announce) get('#diary-announcement').textContent = date + '，' + count + ' 篇日记。';
+    }
+    function showDate(date: string, monthOnly = false) {
+      const url = new URL(location.href);
+      url.searchParams.delete('date');
+      url.searchParams.delete('month');
+      url.hash = monthOnly ? '' : 'day-' + date;
+      if (monthOnly) url.searchParams.set('month',date.slice(0,7));
+      if (url.href !== location.href) history.pushState(null,'',url);
+      render(date);
+    }
+    function restore() {
+      const url = new URL(location.href);
+      const key = url.hash.startsWith('#day-') ? url.hash.slice(5) : url.searchParams.get('date') || '';
+      const month = url.searchParams.get('month') || '';
+      render(isDateKey(key) ? key : isDateKey(month + '-01') ? dateInMonth(month) : newest, false);
+    }
+    for (const button of root.querySelectorAll<HTMLButtonElement>('[data-shift]')) {
+      button.onclick = () => {
+        const month = adjacentMonth(selected.slice(0,7), Number(button.dataset.shift));
+        if (month) showDate(dateInMonth(month), true);
+      };
+    }
+    jump.onchange = () => { if (jump.value) showDate(dateInMonth(jump.value),true); };
+    get('#diary-today').onclick = () => showDate(todayInShanghai());
+    earlier.onclick = () => { if (earlierDate) showDate(earlierDate); };
+    later.onclick = () => { if (laterDate) showDate(laterDate); };
+    body.addEventListener('click', event => {
+      const button = (event.target as Element).closest<HTMLButtonElement>('button[data-key]');
+      if (!button) return;
+      const date = button.dataset.key!;
+      showDate(date);
+      if (records.has(date) && window.matchMedia('(max-width: 800px)').matches) {
+        get('#diary-reading-title').focus({preventScroll:true});
+        get('#diary-reading').scrollIntoView({block:'start'});
+      } else {
+        body.querySelector<HTMLButtonElement>('[tabindex="0"]')?.focus({preventScroll:true});
+      }
+    });
+    body.addEventListener('keydown', event => {
+      const keys = ['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End'];
+      const button = (event.target as Element).closest<HTMLButtonElement>('button[data-key]');
+      if (!button || !keys.includes(event.key)) return;
+      event.preventDefault();
+      const buttons = Array.from(body.querySelectorAll('button'));
+      const index = buttons.indexOf(button);
+      const weekday = (new Date(button.dataset.key + 'T12:00:00Z').getUTCDay() + 6) % 7;
+      const step = {ArrowLeft:-1, ArrowRight:1, ArrowUp:-7, ArrowDown:7, Home:-weekday, End:6-weekday}[event.key]!;
+      const next = buttons[Math.max(0,Math.min(buttons.length-1,index+step))];
+      button.tabIndex = -1;
+      next.tabIndex = 0;
+      next.focus();
+    });
+    // Keep the selected day when a reader follows the in-page jump back to the calendar.
+    get('.diary-back').onclick = event => {
+      event.preventDefault();
+      body.querySelector<HTMLButtonElement>('[tabindex="0"]')?.focus();
+      get('#calendar').scrollIntoView({block:'start'});
+    };
+    window.addEventListener('popstate', restore);
+    window.addEventListener('hashchange', restore);
+    restore();
+    for (const el of root.querySelectorAll<HTMLElement>('[data-enhance]')) el.hidden = false;
+    root.classList.add('is-ready');
+  }
+  const browser = document.getElementById('diary-browser');
+  if (browser) activateCalendar(browser);
+</script>

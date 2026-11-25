@@ -1,0 +1,11 @@
+node_modules/
+.astro/
+dist/
+dist-private/
+.paper-notes/
+/content/[Jj][Oo][Uu][Rr][Nn][Aa][Ll]/
+.env
+.env.*
+*.sqlite*
+*.db
+.DS_Store

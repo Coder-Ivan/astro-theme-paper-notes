@@ -1,0 +1,20 @@
+---
+import Shell from '../layouts/Shell.astro';
+import Sidebar from '../components/Sidebar.astro';
+import ArticleList from '../components/ArticleList.astro';
+import { posts, years } from '../lib/journal.ts';
+---
+<Shell title="文章归档" active="archives">
+  <p slot="hero-meta" class="hero-meta">共 {posts.length} 篇文章</p>
+  <main class="frame columns" id="main">
+    <div class="panel directory">
+      {years.size > 0 ? <>
+        <nav aria-label="年份索引" class="index-links">{[...years].map(([year, articles]) => <a href={'#year-' + encodeURIComponent(year)}>{year}<small>{articles.length}</small></a>)}</nav>
+        {[...years].map(([year, articles]) => <section class="directory-group" id={'year-' + year}>
+          <h2>{year}</h2><ArticleList articles={articles} />
+        </section>)}
+      </> : <p>暂无文章。</p>}
+    </div>
+    <Sidebar/>
+  </main>
+</Shell>

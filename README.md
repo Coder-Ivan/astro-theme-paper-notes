@@ -1,0 +1,76 @@
+# Paper Notes · 山页手记
+
+把 Markdown 或 Joplin 笔记做成一本可以翻阅、检索的网上手记。首页带有山景题头，文章页沿用格纸背景、站主侧栏和随阅读位置更新的章节目录。默认构建生成静态 HTML；需要私有日记和讨论区时，可以启用同一套主题自带的 Node.js 服务。
+
+![山页手记首页预览](docs/preview.webp)
+
+## 五分钟启动
+
+1. 点击 **[Use this template](https://github.com/new?template_name=astro-theme-paper-notes&template_owner=Coder-Ivan)**，选择自己的仓库名和可见性。也可以在仓库的 **Code → Download ZIP** 下载源码。
+2. 克隆自己刚创建的仓库，或解压 ZIP。在包含 `package.json` 的目录打开终端，使用 Node.js 24 和 npm。
+3. 运行以下两条命令，打开终端显示的本地地址，默认是 `http://127.0.0.1:4321/`。项目自带示例笔记和图片。
+
+```sh
+npm ci
+npm run dev
+```
+
+打开一篇文章可以试用章节目录和「继续阅读」链接。点击导航中的搜索，或按 ⌘K / Ctrl+K 搜索全文。结果支持方向键、回车和 Esc。缩窄窗口后可以展开文章目录。
+
+## 换成自己的站点
+
+编辑根目录的 `theme.config.mjs`，保存后重启开发服务。
+
+| 设置 | 用法 |
+| --- | --- |
+| `title`、`description` | 首页标题、站名和站点简介 |
+| `author` | 设置姓名、简介、邮箱、头像。留空邮箱可隐藏联系入口，留空头像会显示名字的首字 |
+| `accent` | 链接及部分控件的强调色，例如 `#805338` |
+| `heroImage` | 将封面放在 `public/images/`，填入 `/images/文件名.webp`。留空时显示 CSS 绘制的山景 |
+| `site` | 上线后填写网站地址，例如 `https://notes.example.org`，用于生成规范网址 |
+| `services` | 默认 `false`。启用账号、私有日记和评论时改为 `true`，按下文启动服务 |
+
+编辑 `src/styles/site.css` 可调整色板、字体、卡片和布局。导航在 `src/layouts/Shell.astro`，作者资料卡在 `src/components/Sidebar.astro`，文章目录的外观在 `src/styles/article-outline.css`。
+
+## 写文章与导入 Joplin
+
+把 Markdown 放进 `content/`。例如，新建 `content/旅行/傍晚的海岸.md`，它会出现在「旅行」分类。顶层目录决定一级分类；标签由文章自己的 Front Matter 提供。给文章取一个固定的 `slug`，以后移动文件或改标题仍能沿用原网址。
+
+```md
+---
+title: 傍晚的海岸
+date: 2025-06-08
+slug: evening-coast
+tags: [散步, 观察]
+---
+
+## 从栈桥出发
+
+潮水退下去时，沙上留着一条细线。
+```
+
+正文支持表格、KaTeX 公式、Mermaid 代码块、图片和 Markdown 笔记互链。引用图片可和文章放在同一份内容目录里，通过相对路径引用。公开搜索会索引标题和正文，归档按年份排列。
+
+在 Joplin 桌面端，右击需要导出的笔记本，选择 **MD – Markdown + Front Matter**，保留导出的子目录和 `_resources/`。要保留笔记互链，请一起导出链接两端的笔记。随后在主题目录运行：
+
+```sh
+npm run import:joplin -- "/实际路径/Joplin导出"
+npm run build
+```
+
+导入副本在本机的 `.paper-notes/imported/`，与手写的 `content/` 一起构建。下一次导入会替换上一次的导入快照。远程构建时，用同一份导出在构建机执行导入，或将适合公开的 Markdown 和附件整理进仓库的 `content/`。
+
+## 选择发布方式
+
+| 想提供的功能 | 部署方式 |
+| --- | --- |
+| 公开文章、分类、标签、归档、搜索、公式和目录 | 保持 `services: false`，运行 `npm run build`，把 **`dist/` 内的文件** 发布到域名根目录。可用 COS 静态网站或其他静态主机 |
+| 注册、预设头像、站主管理、私有日记日历与搜索、登录后评论及回复 | 设置 `services: true`，构建后运行内置服务。需要可持久化 SQLite 文件的 Node.js 主机。参见[账号、评论与私有日记部署](docs/services.md) |
+
+静态站可以用 `npm run preview` 在本地检查构建结果。若希望推送后自动更新，在自己的托管平台关联自己的 Git 仓库，设置生产分支为 `main`、构建命令为 `npm run build`、输出目录为 `dist`。同源的 `/posts/`、`/assets/` 等路径按域名根目录设计。
+
+私有日记放在 `content/Journal/` 下。正文、日记专用附件和索引与公开输出隔离。网站访问权限和源码仓库的可见性是两件事：真实私人日记、Joplin 导出及服务数据库请保存在自己的私有存储中。模板附带的日记练习素材位于 `examples/diary/`。
+
+## 许可与素材
+
+Copyright © 2026 Coder-Ivan 和本项目贡献者。模板按 **GPL-3.0-only** 发布，完整条款见 [LICENSE](LICENSE)。默认山景为本项目使用生成式工具新制的图片，示例文章和插图随模板提供。Astro、KaTeX、Mermaid 等第三方依赖沿用各自的许可证。

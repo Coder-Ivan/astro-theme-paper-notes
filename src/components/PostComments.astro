@@ -1,0 +1,45 @@
+---
+import '../styles/comments.css';
+
+interface Props {
+  slug: string;
+  diary: boolean;
+}
+const { slug, diary } = Astro.props;
+const url = (diary ? '/diary' : '') + '/posts/' + slug + '/#comments';
+---
+<section id="comments" class="panel post-comments" aria-labelledby="comments-title"
+  data-endpoint={'/account/comments/' + (diary ? 'diary/' : 'article/') + slug}>
+  <header class="comments-head">
+    <h2 id="comments-title" tabindex="-1">评论</h2>
+    <span data-count hidden></span>
+  </header>
+  <div data-form-home><form class="comment-form" hidden>
+    <div class="comment-identity">
+      <img data-viewer-avatar alt="" width="32" height="32" />
+      <strong data-viewer-name></strong>
+    </div>
+    <div class="comment-writing-to">
+      <label for="comment-body">写评论</label>
+      <button type="button" class="comment-inline" data-cancel-reply hidden>取消回复</button>
+    </div>
+    <textarea id="comment-body" name="body" rows="3" placeholder="写下你的看法…" aria-describedby="comment-length" required></textarea>
+    <div class="comment-form-actions">
+      <span id="comment-length">0 / 500</span>
+      <button type="submit" class="comment-submit">发表评论</button>
+    </div>
+    <p data-reply-status class="comments-status" role="status" aria-atomic="true"></p>
+  </form></div>
+  <div class="comments-guest" hidden>
+    <a class="comment-login" href={'/account/login?next=' + encodeURIComponent(url)}>登录后发表评论</a>
+  </div>
+  <p data-status class="comments-status" role="status" aria-atomic="true" tabindex="-1"></p>
+  <button type="button" class="comment-secondary" data-retry hidden>重新加载评论</button>
+  <p data-empty class="comments-empty" hidden>还没有评论。</p>
+  <ol class="comment-list" aria-label="评论列表"></ol>
+  <button type="button" class="comment-secondary" data-more hidden>查看更多评论</button>
+  <noscript><p>请启用 JavaScript 查看和发表评论。</p></noscript>
+</section>
+<script>
+  import './post-comments.ts';
+</script>

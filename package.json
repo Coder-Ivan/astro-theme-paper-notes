@@ -1,0 +1,36 @@
+{
+  "name": "astro-theme-paper-notes",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "An Astro field-notes theme for Markdown and Joplin, with optional private journals and discussions.",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "test": "node --test server/tests/services.test.mjs",
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "import:joplin": "node scripts/import-joplin.mjs",
+    "serve": "node server/index.mjs",
+    "owner": "node server/owner.mjs"
+  },
+  "dependencies": {
+    "@mdit/plugin-katex": "1.2.1",
+    "astro": "7.4.13",
+    "github-slugger": "2.0.0",
+    "katex": "0.19.1",
+    "markdown-it": "15.0.3",
+    "mermaid": "12.3.0",
+    "micromark": "4.0.3",
+    "micromark-util-decode-string": "2.0.1",
+    "ultrahtml": "1.7.0",
+    "yaml": "2.9.1"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.2",
+    "typescript": "6.0.3"
+  },
+  "license": "GPL-3.0-only"
+}

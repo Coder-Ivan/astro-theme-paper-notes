@@ -1,0 +1,40 @@
+---
+import { posts, years, tags, notebooks, sortedNotebooks, notebookAnchor, type JournalPost } from '../lib/journal.ts';
+import Landscape from './Landscape.astro';
+import theme from '../../theme.config.mjs';
+import NavIcon from './NavIcon.astro';
+interface Props { post?: JournalPost }
+const { post } = Astro.props;
+const author = theme.author;
+const popular = [...sortedNotebooks].sort((a, b) => b[1].articles.length - a[1].articles.length).slice(0, 5);
+const summary = [
+  { name: '文章', count: posts.length, href: '/archives/' },
+  ...(notebooks.size ? [{ name: '分类', count: notebooks.size, href: '/categories/' }] : []),
+  ...(tags.length ? [{ name: '标签', count: tags.length, href: '/tags/' }] : []),
+];
+---
+<aside class="sidebar" aria-label="文章索引">
+  <section class="panel profile" aria-labelledby="profile-name">
+    <div class="profile-landscape"><Landscape compact /></div>
+    <div class="profile-inner">
+      {author.avatar
+        ? <img class="profile-avatar" src={author.avatar} width="80" height="80" alt="" loading="lazy" decoding="async" />
+        : <span class="profile-avatar avatar-initial" aria-hidden="true">{Array.from(author.name)[0]}</span>}
+      <h2 id="profile-name">{author.name}</h2>
+      {author.bio && <p class="profile-bio">{author.bio}</p>}
+      <div class="stats">{summary.map(item => <a href={item.href}><strong>{item.count}</strong><span>{item.name}</span></a>)}</div>
+      {author.email && <a class="profile-email" href={'mailto:' + author.email} aria-label={'给站主发邮件：' + author.email}>
+        <NavIcon name="mail" /><span>{author.email}</span>
+      </a>}
+    </div>
+  </section>
+  {popular.length > 0 && <section class="panel side-panel">
+    <h2>笔记分类</h2>
+    <ul>{popular.map(([title, book]) => <li><a href={'/categories/#' + notebookAnchor([title])}><span>{title}</span><small>{book.articles.length}</small></a></li>)}</ul>
+    <a class="side-more" href="/categories/">所有分类</a>
+  </section>}
+  {!post && years.size > 0 && <section class="panel side-panel">
+    <h2>按年归档</h2>
+    <ul>{[...years].slice(0, 5).map(([year, articles]) => <li><a href={'/archives/#year-' + encodeURIComponent(year)}><span>{year}</span><small>{articles.length}</small></a></li>)}</ul>
+  </section>}
+</aside>

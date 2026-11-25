@@ -1,0 +1,14 @@
+---
+import type { OutlineItem } from '../lib/outline.ts';
+interface Props { items: OutlineItem[] }
+const { items } = Astro.props;
+---
+<ol>
+  {items.map(item => <li>
+    <a href={'#' + encodeURIComponent(item.id)}>
+      <span class="outline-number" aria-hidden="true">{item.number}</span>
+      <span>{item.title}</span>
+    </a>
+    {item.children.length > 0 && <Astro.self items={item.children} />}
+  </li>)}
+</ol>

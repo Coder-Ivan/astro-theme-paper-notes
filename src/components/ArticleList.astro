@@ -1,0 +1,11 @@
+---
+import { dateLabel, postUrl, type JournalPost } from '../lib/journal.ts';
+interface Props { articles: JournalPost[] }
+const { articles } = Astro.props;
+---
+<ul class="article-list">
+  {articles.map(post => <li>
+    <a href={postUrl(post)}>{post.title}</a>
+    {post.created && <time datetime={post.created}>{dateLabel(post.created)}</time>}
+  </li>)}
+</ul>

@@ -1,0 +1,8 @@
+---
+import PostFeed from '../../components/PostFeed.astro';
+import { pageCount } from '../../lib/journal.ts';
+export function getStaticPaths() {
+  return Array.from({ length: pageCount - 1 }, (_, index) => ({ params: { number: String(index + 2) }, props: { page: index + 2 } }));
+}
+---
+<PostFeed page={Astro.props.page} />

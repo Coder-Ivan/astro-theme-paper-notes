@@ -1,0 +1,11 @@
+---
+import theme from '../../theme.config.mjs';
+interface Props { compact?: boolean }
+const { compact = false } = Astro.props;
+---
+<div class:list={['landscape', { 'landscape-art': !theme.heroImage }]} aria-hidden="true">
+  {theme.heroImage
+    ? <img src={theme.heroImage} alt="" loading={compact ? 'lazy' : 'eager'}
+        fetchpriority={compact ? 'low' : 'high'} decoding="async" />
+    : <><i class="range range-distant"></i><i class="range range-near"></i></>}
+</div>

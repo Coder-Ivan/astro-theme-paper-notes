@@ -1,0 +1,10 @@
+---
+import PostPage from '../components/PostPage.astro';
+import { diaryPosts, postPaths } from '../lib/journal.ts';
+import { diaryDate } from '../lib/diary.ts';
+
+export function getStaticPaths() {
+  return postPaths([...diaryPosts].sort((a, b) => diaryDate(b).localeCompare(diaryDate(a))));
+}
+---
+<PostPage {...Astro.props} />

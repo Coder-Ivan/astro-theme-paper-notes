@@ -1,0 +1,38 @@
+---
+import Shell from '../layouts/Shell.astro';
+import theme from '../../theme.config.mjs';
+import PostMeta from './PostMeta.astro';
+import Sidebar from './Sidebar.astro';
+import { posts, postUrl, pageSize, pageCount, pageUrl } from '../lib/journal.ts';
+interface Props { page?: number }
+const { page = 1 } = Astro.props;
+const articles = posts.slice((page - 1) * pageSize, page * pageSize);
+const pages = Array.from({ length: pageCount }, (_, i) => i + 1).filter(n => n === 1 || n === pageCount || Math.abs(n - page) <= 1);
+const heading = page === 1 ? theme.title : '文章列表';
+---
+<Shell active="posts" home={page === 1} title={page === 1 ? undefined : '文章 · 第 ' + page + ' 页'} heading={heading}>
+  <p slot="hero-meta" class="hero-meta">{page === 1 ? theme.description || '共 ' + posts.length + ' 篇文章' : '第 ' + page + ' 页'}</p>
+  <main class="frame columns" id="main">
+    <div class="feed">
+      <h2 class="section-title">{page === 1 ? '最新文章' : '文章列表'}</h2>
+      {articles.length === 0 && <p class="panel empty">暂无文章。</p>}
+      {articles.map((post, i) => <article class:list={['panel', 'post-card', { illustrated: !!post.cover, reverse: i % 2 === 1 }]}>
+        {post.cover && <a class="post-image" tabindex="-1" aria-hidden="true" href={postUrl(post)}><img src={post.cover.src} alt="" loading="lazy" decoding="async" /></a>}
+        <div class="post-copy">
+          <PostMeta post={post} />
+          <h3><a href={postUrl(post)}>{post.title}</a></h3>
+          {post.excerpt && <p class="excerpt">{post.excerpt.slice(0, 210)}</p>}
+        </div>
+      </article>)}
+      {pageCount > 1 && <nav class="pagination" aria-label="文章分页">
+        {page > 1 && <a href={pageUrl(page - 1)} rel="prev">上一页</a>}
+        {pages.map((n, i) => <>
+          {i > 0 && n - pages[i - 1] > 1 && <span aria-hidden="true">…</span>}
+          <a href={pageUrl(n)} aria-label={'第 ' + n + ' 页'} aria-current={n === page ? 'page' : undefined}>{n}</a>
+        </>)}
+        {page < pageCount && <a href={pageUrl(page + 1)} rel="next">下一页</a>}
+      </nav>}
+    </div>
+    <Sidebar />
+  </main>
+</Shell>
