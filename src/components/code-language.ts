@@ -60,27 +60,71 @@ function addCopyButton(controls: HTMLElement, toolbar: HTMLElement, code: HTMLEl
   });
 }
 
-function createLineToggle(gutter: HTMLElement, storageKey: string, blockNumber: number) {
+interface DisplayPreference {
+  className: string;
+  label: string;
+  target: HTMLElement;
+  storageKey: string;
+  storedValue: string;
+  defaultChecked: boolean;
+  apply: (checked: boolean) => void;
+}
+
+function createDisplayToggle(blockNumber: number, preference: DisplayPreference) {
   const label = document.createElement('label');
-  label.className = 'code-lines-toggle';
+  label.className = preference.className;
   const checkbox = document.createElement('input');
   checkbox.type = 'checkbox';
-  checkbox.setAttribute('aria-label', '第 ' + blockNumber + ' 个代码块的行号');
-  checkbox.setAttribute('aria-controls', gutter.id);
-  label.append(checkbox, '行号');
-
+  checkbox.setAttribute('aria-label', '第 ' + blockNumber + ' 个代码块的' + preference.label);
+  checkbox.setAttribute('aria-controls', preference.target.id);
+  label.append(checkbox, preference.label);
+  checkbox.checked = preference.defaultChecked;
   try {
-    gutter.hidden = localStorage.getItem(storageKey) === 'hidden';
-  } catch { /* Keep the default when local storage is unavailable. */ }
-  checkbox.checked = !gutter.hidden;
+    if (localStorage.getItem(preference.storageKey) === preference.storedValue) {
+      checkbox.checked = !preference.defaultChecked;
+    }
+  } catch { /* Start with the default when storage is unavailable. */ }
+  preference.apply(checkbox.checked);
   checkbox.addEventListener('change', () => {
-    gutter.hidden = !checkbox.checked;
+    preference.apply(checkbox.checked);
     try {
-      if (gutter.hidden) localStorage.setItem(storageKey, 'hidden');
-      else localStorage.removeItem(storageKey);
+      if (checkbox.checked === preference.defaultChecked) localStorage.removeItem(preference.storageKey);
+      else localStorage.setItem(preference.storageKey, preference.storedValue);
     } catch { /* The switch also works without persistence. */ }
   });
   return label;
+}
+
+function wrapLineNumber(number: number) {
+  const marker = document.createElement('span');
+  marker.className = 'code-wrap-line-number';
+  marker.setAttribute('aria-hidden', 'true');
+  marker.dataset.line = String(number);
+  return marker;
+}
+
+function markWrapLineStarts(code: HTMLElement) {
+  if (code.querySelector('.code-wrap-line-number')) return;
+  const walker = document.createTreeWalker(code, NodeFilter.SHOW_TEXT);
+  let line = 0;
+  let atStart = true;
+  let node = walker.nextNode() as Text | null;
+  while (node) {
+    const next = walker.nextNode() as Text | null;
+    const text = node.data;
+    if (text && (atStart || text.includes('\n'))) {
+      const fragment = document.createDocumentFragment();
+      // Keep every source character inside its original syntax token.
+      for (const segment of text.match(/[^\n]*\n|[^\n]+$/g) || []) {
+        if (atStart) fragment.append(wrapLineNumber(++line));
+        fragment.append(segment);
+        atStart = segment.endsWith('\n');
+      }
+      node.replaceWith(fragment);
+    }
+    node = next;
+  }
+  if (line === 0) code.prepend(wrapLineNumber(1));
 }
 
 const previewLineCount = 15;
@@ -115,7 +159,6 @@ function enableFolding(block: HTMLElement, code: HTMLElement, gutter: HTMLElemen
   const lineCount = numbers.length;
   if (lineCount <= previewLineCount) return false;
   gutter.dataset.previewLines = numbers.slice(0, previewLineCount).join('\n');
-  code.id = 'code-content-' + block.dataset.codeBlock;
   const button = document.createElement('button');
   button.type = 'button';
   button.className = 'code-fold-toggle';
@@ -167,11 +210,27 @@ function enableLanguagePicker(block: HTMLElement, code: HTMLElement, articleKey:
   controls.append(select);
   toolbar.append(label, message);
   const gutter = block.querySelector<HTMLElement>(':scope > .code-line-numbers');
-  if (gutter) {
-    const lineKey = 'paper-notes:code-lines:' + articleKey + ':' + block.dataset.codeBlock;
-    toolbar.append(createLineToggle(gutter, lineKey, index + 1));
-  }
+  code.id = 'code-content-' + block.dataset.codeBlock;
   const foldable = gutter && enableFolding(block, code, gutter);
+  const preferenceId = articleKey + ':' + block.dataset.codeBlock;
+  if (gutter) {
+    toolbar.append(createDisplayToggle(index + 1, {
+      className: 'code-lines-toggle', label: '行号', target: gutter,
+      storageKey: 'paper-notes:code-lines:' + preferenceId, storedValue: 'hidden', defaultChecked: true,
+      apply: checked => { gutter.hidden = !checked; },
+    }));
+    const numbers = gutter.dataset.lines || '1';
+    const digits = numbers.length - numbers.lastIndexOf('\n') - 1;
+    block.style.setProperty('--code-line-digits', digits + 'ch');
+  }
+  toolbar.append(createDisplayToggle(index + 1, {
+    className: 'code-wrap-toggle', label: '自动换行', target: code,
+    storageKey: 'paper-notes:code-wrap:' + preferenceId, storedValue: 'on', defaultChecked: false,
+    apply: checked => {
+      if (checked) markWrapLineStarts(code);
+      block.toggleAttribute('data-code-wrap', checked);
+    },
+  }));
   toolbar.append(controls);
   addCopyButton(controls,toolbar,code);
   block.prepend(toolbar);
@@ -201,6 +260,7 @@ function enableLanguagePicker(block: HTMLElement, code: HTMLElement, articleKey:
       // The engine escapes source text and emits only syntax-token spans.
       code.innerHTML = html;
       if (foldable) markFoldTail(code);
+      if (block.hasAttribute('data-code-wrap')) markWrapLineStarts(code);
       code.classList.remove('language-' + (block.dataset.language || 'plaintext'));
       code.classList.add('language-' + language);
       block.dataset.language = language;
