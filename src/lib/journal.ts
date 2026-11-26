@@ -1,4 +1,7 @@
+import { createHash } from 'node:crypto';
 import MarkdownIt, { type Token } from 'markdown-it';
+import { codeLanguageId } from './code-languages.mjs';
+import { highlightCode } from './code-highlight.mjs';
 import { katex } from '@mdit/plugin-katex';
 import GithubSlugger from 'github-slugger';
 import config from '../../theme.config.mjs';
@@ -71,14 +74,28 @@ md.renderer.rules.image = (tokens, index, options, env, self) => {
   return defaultImage(tokens, index, options, env, self);
 };
 
-const defaultFence = md.renderer.rules.fence;
-md.renderer.rules.fence = (tokens, index, options, env, self) => {
+function fenceLanguage(info: string) {
+  return md.utils.unescapeAll(info).trim().split(/\s+/,1)[0].toLowerCase();
+}
+
+const renderCode: NonNullable<typeof md.renderer.rules.fence> = (tokens, index, _options, env) => {
   const token = tokens[index];
-  if (token.info.trim() === 'mermaid') {
+  const name = fenceLanguage(token.info);
+  if (name === 'mermaid') {
     return '<pre class="mermaid">' + md.utils.escapeHtml(token.content) + '</pre>\n';
   }
-  return defaultFence(tokens, index, options, env, self);
+  const declared = codeLanguageId(name);
+  const { html, language } = highlightCode(token.content, declared || 'auto');
+  const digest = createHash('sha256').update(token.content).digest('hex').slice(0,24);
+  // Identical snippets can occur twice in one article and have separate reader preferences.
+  const occurrence = (env.codeOccurrences.get(digest) || 0) + 1;
+  env.codeOccurrences.set(digest, occurrence);
+  return '<div class="code-block" data-code-block="' + digest + '-' + occurrence +
+    '" data-language="' + language + '" data-source="' + (declared ? 'explicit' : 'auto') +
+    '"><pre><code class="hljs language-' + language + '">' + html + '</code></pre></div>\n';
 };
+md.renderer.rules.fence = renderCode;
+md.renderer.rules.code_block = renderCode;
 
 function inlineText(tokens: Token[], includeEmbeds = false): string {
   return tokens.map(token => {
@@ -181,7 +198,7 @@ function restrictLinks(tokens: Token[], diary: boolean) {
 }
 
 function preparePost(post: ExportedPost): JournalPost {
-  const env = { slug: post.slug };
+  const env = { slug: post.slug, codeOccurrences:new Map<string, number>() };
   const tokens = md.parse(post.body, env);
   restrictLinks(tokens, isDiary(post));
   let cover: JournalPost['cover'];
@@ -204,7 +221,7 @@ function preparePost(post: ExportedPost): JournalPost {
         }
       }
     }
-    if (token.type === 'fence' && token.info.trim() === 'mermaid') hasMermaid = true;
+    if (token.type === 'fence' && fenceLanguage(token.info) === 'mermaid') hasMermaid = true;
   });
 
   return { ...post, cover, excerpt, headings, hasMermaid, html: md.renderer.render(tokens, md.options, env) };

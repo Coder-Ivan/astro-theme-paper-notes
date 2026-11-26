@@ -5,12 +5,56 @@ import { cp, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'n
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
+import { parse, TEXT_NODE } from 'ultrahtml';
+import { querySelector, querySelectorAll } from 'ultrahtml/selector';
+import { decodeString } from 'micromark-util-decode-string';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { openStore } from '../server/storage.mjs';
 
 const exec = promisify(execFile);
 const project = fileURLToPath(new URL('../', import.meta.url));
+
+const pythonSample = [
+  'from dataclasses import dataclass',
+  '@dataclass',
+  'class Sample:',
+  '    score: int',
+  '    def describe(self):',
+  '        return "<sample> &amp;" if self.score < 12 else "high"',
+].join('\n');
+const codeExamples = [
+  '`inlineExample`', '```python', pythonSample, '```', '',
+  '```', pythonSample, '```', '',
+  '```unknown-example', pythonSample, '```', '',
+  pythonSample.split('\n').map(line => '    ' + line).join('\n'), '',
+  '```mermaid', 'flowchart TD', 'A --> B', '```',
+].join('\n');
+
+function codeText(node) {
+  if (node.type === TEXT_NODE) return node.value.replace(/&(?:#[0-9]+|#x[\da-f]+|[a-z][\da-z]+);/gi, entity => decodeString(entity));
+  return node.children.map(codeText).join('');
+}
+
+function assertCodeExamples(html, searchText) {
+  const tree = parse(html);
+  const blocks = querySelectorAll(tree,'[data-code-block]');
+  assert.equal(blocks.length,4);
+  assert.equal(new Set(blocks.map(block => block.attributes['data-code-block'])).size,4);
+  assert.ok(blocks.every(block => block.attributes['data-language'] === 'python'));
+  assert.deepEqual(blocks.map(block => block.attributes['data-source']),['explicit','auto','auto','auto']);
+  const explicitCode = querySelector(blocks[0],'pre code');
+  assert.ok(querySelector(explicitCode,'.hljs-keyword'));
+  assert.ok(querySelector(explicitCode,'.hljs-string'));
+  for (const block of blocks) {
+    const child = querySelector(block,'pre code');
+    assert.equal(codeText(child),pythonSample + '\n');
+    assert.ok(!querySelector(child,'sample'));
+  }
+  assert.equal(codeText(querySelector(tree,'pre.mermaid')),'flowchart TD\nA --> B\n');
+  assert.ok(html.includes('<code>inlineExample</code>'));
+  assert.ok(searchText.includes(pythonSample.replace(/\s+/g,' ')));
+}
 
 test('hidden articles leave the public build and pinned articles move ahead of pagination', async t => {
   const site = await mkdtemp(join(tmpdir(), 'paper-notes-articles-'));
@@ -25,8 +69,8 @@ test('hidden articles leave the public build and pinned articles move ahead of p
   const category = join(site,'content/Field');
   await mkdir(category,{recursive:true});
   await mkdir(join(site,'content/Journal'));
-  await writeFile(join(site,'content/Journal/diary.md'),'---\ntitle: Private diary\nslug: diary-sample\npinned: true\nhidden: true\n---\nDiary sample body');
-  await writeFile(join(category,'early.md'),'---\ntitle: Early observation\nslug: early\ndate: 2001-01-01\npinned: true\n---\nEarly observation body.');
+  await writeFile(join(site,'content/Journal/diary.md'),'---\ntitle: Private diary\nslug: diary-sample\npinned: true\nhidden: true\n---\nDiary sample body\n\n' + codeExamples);
+  await writeFile(join(category,'early.md'),'---\ntitle: Early observation\nslug: early\ndate: 2001-01-01\npinned: true\n---\nEarly observation body.\n\n' + codeExamples);
   for (let i=1; i<=10; i++) {
     const day = String(i).padStart(2,'0');
     await writeFile(join(category,'entry-'+day+'.md'),'---\ntitle: Entry '+day+'\nslug: entry-'+day+'\ndate: 2024-05-'+day+'\n---\n' +
@@ -45,6 +89,8 @@ test('hidden articles leave the public build and pinned articles move ahead of p
   await importNotes();
   await build();
 
+  const search = JSON.parse(await contents('dist','assets/search.json'));
+  assertCodeExamples(await contents('dist','posts/early/index.html'), search.find(post => post.url === '/posts/early/').text);
   const home = await contents('dist','index.html');
   assert.match(home,/href="\/posts\/early\/"/);
   assert.ok(home.indexOf('/posts/early/') < home.indexOf('/posts/entry-10/'));
@@ -65,6 +111,8 @@ test('hidden articles leave the public build and pinned articles move ahead of p
   const config = await readFile(join(site,'theme.config.mjs'),'utf8');
   await writeFile(join(site,'theme.config.mjs'),config.replace('services: false','services: true'));
   await build();
+  const diarySearch = JSON.parse(await contents('dist-private','diary/search.json'));
+  assertCodeExamples(await contents('dist-private','diary/posts/diary-sample/index.html'),diarySearch[0].text);
   const privateIndex = JSON.parse(await contents('dist-private','threads.json'));
   const hidden = privateIndex.articles.find(note=>note.id===secretId);
   assert.deepEqual(hidden,{id:secretId,slug:'hidden-sample',title:'Secret title',category:'Notebook',hidden:true,pinned:false});

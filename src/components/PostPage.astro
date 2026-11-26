@@ -1,5 +1,7 @@
 ---
 import 'katex/dist/katex.min.css';
+import { createHash } from 'node:crypto';
+import '../styles/code-language.css';
 import Shell from '../layouts/Shell.astro';
 import theme from '../../theme.config.mjs';
 import PostMeta from './PostMeta.astro';
@@ -17,6 +19,8 @@ interface Props {
 }
 const { post, older, newer } = Astro.props;
 const diary = isDiary(post);
+const codeArticle = post.html.includes('data-code-block=')
+  ? createHash('sha256').update(postUrl(post)).digest('hex').slice(0,24) : undefined;
 const day = diary ? diaryDate(post) : '';
 const calendarUrl = day ? '/diary/#day-' + day : '/diary/';
 const next = older || newer;
@@ -34,7 +38,7 @@ const hasOutline = post.headings.length > 0;
     {hasOutline && <ArticleOutline headings={post.headings} />}
     <div class="post-reading-column">
       <article class="panel article">
-        <div class="prose" set:html={post.html}></div>
+        <div class="prose" data-code-article={codeArticle} set:html={post.html}></div>
         {diary && !post.body.trim() && <p class="empty-diary">这篇日记只有标题。</p>}
         {diary && (older || newer) && <nav class="diary-entry-nav" aria-label="日记翻页">
           {older && <a href={postUrl(older)}><small>上一篇日记</small>{older.title}</a>}
@@ -46,6 +50,9 @@ const hasOutline = post.headings.length > 0;
     </div>
     {!diary && <Sidebar post={post}/>}
   </main>
+  <script>
+    if (document.querySelector('.prose[data-code-article]')) void import('./code-language.ts');
+  </script>
   <script is:inline>
     const prose = document.querySelector('.prose');
     function showImageLink(img) {
