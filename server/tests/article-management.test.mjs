@@ -48,8 +48,9 @@ test('a site owner controls grouped articles through the live server and automat
   await writeFile(config,(await readFile(config,'utf8')).replace('services: false','services: true'));
   await mkdir(join(site,'content/Field/Nested'),{recursive:true});
   const id = 'a'.repeat(32);
+  const laterId = 'b'.repeat(32);
   await writeFile(join(site,'content/early.md'),'---\ntitle: Early\nslug: early\ndate: 2001-01-01\nid: '+id+'\n---\nEarly sample.');
-  await writeFile(join(site,'content/Field/Nested/later.md'),'---\ntitle: Later\nslug: later\ndate: 2024-01-01\n---\nLater sample.');
+  await writeFile(join(site,'content/Field/Nested/later.md'),'---\ntitle: Later\nslug: later\ndate: 2024-01-01\nid: '+laterId+'\n---\nLater sample.');
   const data = join(site,'state');
   const password = randomUUID();
   const store = openStore(data);
@@ -140,4 +141,19 @@ test('a site owner controls grouped articles through the live server and automat
   const restored = await (await request(thread,reader)).json();
   assert.equal(restored.total,1);
   assert.equal(restored.comments[0].body,'Persistent comment');
+
+  async function bulk(action) {
+    const fields = new URLSearchParams({csrf:ownerCsrf,mode:'bulk',action});
+    fields.append('id',id);
+    fields.append('id',laterId);
+    const res = await request(path,owner,fields);
+    assert.equal(res.status,303);
+    assert.equal(new URL(res.headers.get('location'),origin).searchParams.get('selected'),'2');
+  }
+  await bulk('hide');
+  await waitFor(async ()=>(await search()).length === 0,'both selected articles to leave the public search');
+  for (const slug of ['early','later']) assert.equal((await request('/posts/'+slug+'/')).status,404);
+  await bulk('show');
+  await waitFor(async ()=>(await search()).length === 2,'both selected articles to be published again');
+  assert.equal((await (await request(thread,reader)).json()).total,1);
 });

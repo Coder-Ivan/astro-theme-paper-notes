@@ -8,10 +8,35 @@ const actions = new Map([
   ['show',['hidden',false]], ['hide',['hidden',true]], ['pin',['pinned',true]], ['unpin',['pinned',false]],
 ]);
 
-export function settingChange(id, action) {
+export const articleFormLimit = 1024 * 1024;
+export const isArticleManagement = path => path === '/account/posts' || path === '/account/posts/';
+
+export function articleAction(action) {
   const change = actions.get(action);
-  if (!change || !/^[a-f0-9]{32}$/.test(id)) return null;
-  return {key:prefix + id + '/' + change[0], field:change[0], value:change[1]};
+  if (!change) return null;
+  const [field,value] = change;
+  return {field,value};
+}
+
+export function applyArticleSettings(db, posts, {field,value}) {
+  let changed = 0;
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const overrides = storedSettings(db);
+    const write = db.prepare('INSERT OR REPLACE INTO records(key, data, expires) VALUES (?, ?, NULL)');
+    const data = Buffer.from(JSON.stringify(value));
+    for (const post of posts) {
+      if ((overrides[post.id]?.[field] ?? post[field]) !== value) {
+        write.run(prefix + post.id + '/' + field, data);
+        changed++;
+      }
+    }
+    db.exec('COMMIT');
+    return changed;
+  } catch (error) {
+    db.exec('ROLLBACK');
+    throw error;
+  }
 }
 
 export function storedSettings(db) {

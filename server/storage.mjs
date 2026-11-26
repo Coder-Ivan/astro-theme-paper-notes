@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { storedSettings } from './article-settings.mjs';
+import { applyArticleSettings, storedSettings } from './article-settings.mjs';
 import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -55,6 +55,7 @@ export function openStore(directory, release) {
   return {
     threads: refresh,
     articleSettings: () => storedSettings(db),
+    updateArticleSettings: (posts, change) => applyArticleSettings(db,posts,change),
     readDiary: key => release.readDiary(key),
     refresh,
     close: () => db.close(),

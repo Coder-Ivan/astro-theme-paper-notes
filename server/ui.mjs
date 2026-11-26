@@ -24,6 +24,8 @@ button.secondary,.button.secondary{color:#255850;background:#f7faf8;border-color
 .post-search{display:flex;align-items:end;flex-wrap:wrap;gap:.65rem}.post-search label{flex:1 1 16rem;min-width:0;margin:0}.post-search .actions{min-height:2.75rem}
 .post-group{border-block-start:1px solid #dce5e2}.post-group summary{padding:.85rem .25rem;cursor:pointer;color:var(--accent);overflow-wrap:anywhere}.post-group summary::marker{color:#59827a}.post-group summary strong{margin-inline-start:.3rem}.post-group summary small{display:inline-block;margin-inline-start:.7rem;color:#566b69}.post-group[open] summary{margin-block-end:.25rem}
 .managed-posts{list-style:none;margin:0;padding:0 0 .65rem clamp(.35rem,2vw,1.5rem)}.managed-post{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.75rem 1.25rem;padding:1rem 0;border-top:1px solid #dce5e2;scroll-margin-block:1rem}.post-details{flex:1 1 17rem;min-width:0;overflow-wrap:anywhere}.post-title{font-size:1.08rem;line-height:1.4;margin:0 0 .25rem}.post-detail{margin:0;color:#566b69;font-size:.92rem}.managed-post .actions{gap:.5rem}.managed-post button{padding:.45rem .8rem}
+.bulk-posts{margin:0 0 1rem;padding:.8rem 1rem;border:1px solid #d1dfda;border-radius:.55rem;background:#f3f7f5}.bulk-heading,.bulk-actions{display:flex;align-items:center;flex-wrap:wrap;gap:.45rem .7rem}.bulk-heading output,.bulk-scope{font-size:.9rem;color:#466663}.bulk-heading .bulk-clear{margin-inline-start:auto}.bulk-actions{margin-top:.65rem}.bulk-posts button{font-size:.94rem;padding:.37rem .7rem}.bulk-posts button:disabled{color:#677774;background:#f3f5f4;border-color:#ced7d3;cursor:default;filter:none}.bulk-posts .bulk-scope{margin:.25rem 0 0}.bulk-heading [hidden],.category-choice[hidden]{display:none}
+.post-choice-group{position:relative}.post-choice-group.has-group-toggle summary{padding-inline-start:2.9rem}.category-choice{position:absolute;top:.13rem;inset-inline-start:0;display:grid;place-items:center;width:2.6rem;height:2.6rem;margin:0;cursor:pointer}.category-choice input,.post-choice input{width:1.15rem;height:1.15rem;margin:0;accent-color:var(--accent);cursor:pointer}.post-choice{display:flex;align-items:flex-start;gap:.65rem;margin:0;min-height:1.6rem;cursor:pointer;font-weight:inherit}.post-choice input{flex:none;margin-top:.16rem}.post-choice span{min-width:0}.managed-post .post-detail{margin-inline-start:1.8rem}
 @media(max-width:38rem){main{padding-inline:.8rem}.bar{padding-inline:1rem}.brand{font-size:1.15rem}.actions{gap:.5rem}nav{gap:.6rem}.user select{max-width:12rem}}
 @media(max-width:32rem){.bar{flex-wrap:wrap}.post-search label{flex-basis:100%}}
 ` + avatarCss;
@@ -79,8 +81,66 @@ export function users(session, accounts, info = '', credential = null, error = f
 export function confirmDelete(session, name) {
   return shell('删除用户','<section class="narrow"><h1>删除用户</h1><p>删除 ' + escape(name) + ' 后，该账号会立即失去访问权限。</p><form method="post" action="/account/users" class="actions">' + token(session) + field('action','delete') + field('username',name) + '<button class="danger">确认删除</button><a href="/account/users">取消</a></form></section>',session);
 }
+function managePostSelection() {
+  const form = document.getElementById('bulk-posts');
+  if (!form) return;
+  const groups = Array.from(document.querySelectorAll('.post-choice-group'), group => ({
+    toggle: group.querySelector('.category-choice input'),
+    rows: Array.from(group.querySelectorAll('input[form="bulk-posts"]')),
+  }));
+  const counter = form.querySelector('output');
+  const clear = form.querySelector('.bulk-clear');
+  const actions = form.querySelectorAll('button[type="submit"]');
+
+  function update() {
+    let total = 0;
+    for (const {toggle,rows} of groups) {
+      const count = rows.filter(row => row.checked).length;
+      toggle.checked = count === rows.length;
+      toggle.indeterminate = count > 0 && count < rows.length;
+      total += count;
+    }
+    counter.textContent = '已选 ' + total + ' 篇';
+    clear.disabled = total === 0;
+    actions.forEach(button => { button.disabled = total === 0; });
+  }
+
+  for (const {toggle,rows} of groups) {
+    toggle.closest('label').hidden = false;
+    toggle.closest('.post-choice-group').classList.add('has-group-toggle');
+    toggle.addEventListener('change', () => {
+      rows.forEach(row => { row.checked = toggle.checked; });
+      update();
+    });
+    rows.forEach(row => row.addEventListener('change',update));
+  }
+  clear.hidden = false;
+  counter.hidden = false;
+  clear.addEventListener('click', () => {
+    for (const {rows} of groups) rows.forEach(row => { row.checked = false; });
+    update();
+  });
+  window.addEventListener('pageshow',update);
+  update();
+}
+
+// Hash this exact, fixed script in the article-management page's CSP.
+export const postSelectionScript = '(' + managePostSelection.toString() + ')();';
+
+function bulkPostForm(session, query) {
+  const actions = [['show','批量显示'],['hide','批量隐藏'],['pin','批量置顶'],['unpin','批量取消置顶']];
+  const buttons = actions.map(([value,label]) =>
+    '<button type="submit" class="secondary" name="action" value="' + value + '">' + label + '</button>').join('');
+  return '<form id="bulk-posts" method="post" action="/account/posts" class="bulk-posts" aria-label="批量操作">' +
+    token(session) + field('mode','bulk') + field('q',query) +
+    '<div class="bulk-heading"><strong>批量操作</strong><output hidden aria-live="polite" aria-atomic="true">已选 0 篇</output>' +
+    '<button type="button" class="secondary bulk-clear" hidden>清空选择</button></div>' +
+    (query.trim() ? '<p class="bulk-scope">分类全选仅选中当前搜索结果。</p>' : '') +
+    '<div class="bulk-actions">' + buttons + '</div></form>';
+}
+
 const postOrder = new Intl.Collator('zh-CN', {numeric:true});
-export function posts(session, entries, query = '', status = 'ready', savedId = '') {
+export function posts(session, entries, query = '', status = 'ready', savedId = '', bulkSaved = null) {
   const term = query.trim().toLowerCase();
   const groups = new Map();
   let count = 0;
@@ -99,7 +159,9 @@ export function posts(session, entries, query = '', status = 'ready', savedId = 
     const visibility = post.hidden ? '显示' : '隐藏';
     const pin = post.pinned ? '取消置顶' : '置顶';
     const status = [post.hidden ? '隐藏' : '显示', post.pinned && (post.hidden ? '恢复显示后置顶' : '已置顶')].filter(Boolean).join(' · ');
-    return '<li class="managed-post" id="post-' + escape(post.id) + '" tabindex="-1"><div class="post-details"><h3 class="post-title">' + title + '</h3><p class="post-detail">' + status + '</p></div>' +
+    return '<li class="managed-post" id="post-' + escape(post.id) + '" tabindex="-1"><div class="post-details"><h3 class="post-title"><label class="post-choice">' +
+      '<input type="checkbox" name="id" value="' + escape(post.id) + '" form="bulk-posts" aria-label="选择《' + title + '》"><span>' +
+      title + '</span></label></h3><p class="post-detail">' + status + '</p></div>' +
       '<form method="post" action="/account/posts" class="actions">' + token(session) + field('id',post.id) + field('q',query) +
       '<button name="action" value="' + (post.hidden ? 'show' : 'hide') + '" class="secondary" aria-label="' + visibility + '《' + title + '》">' + visibility + '</button>' +
       '<button name="action" value="' + (post.pinned ? 'unpin' : 'pin') + '" class="secondary" aria-label="' + pin + '《' + title + '》">' + pin + '</button></form></li>';
@@ -108,19 +170,22 @@ export function posts(session, entries, query = '', status = 'ready', savedId = 
     const articles = groups.get(category);
     const open = term || articles.some(post => post.id === savedId);
     const rows = articles.sort((a,b) => postOrder.compare(a.title,b.title)).map(row).join('');
-    return '<details class="post-group"' + (open ? ' open' : '') + '><summary><strong>' + escape(category) + '</strong><small>' +
-      articles.length + ' 篇</small></summary><ul class="managed-posts">' + rows + '</ul></details>';
+    const selection = '选择「' + escape(category) + '」分类' + (term ? '中匹配的文章' : '的全部文章');
+    return '<div class="post-choice-group"><label class="category-choice" hidden title="' + selection + '">' +
+      '<input type="checkbox" aria-label="' + selection + '"></label><details class="post-group"' + (open ? ' open' : '') + '><summary><strong>' + escape(category) + '</strong><small>' +
+      articles.length + ' 篇</small></summary><ul class="managed-posts">' + rows + '</ul></details></div>';
   }).join('');
   const result = sections || '<p class="muted">' + (term ? '没有找到匹配的文章。请换个标题或分类关键词。' : '当前没有可管理的文章。') + '</p>';
   const failed = status === 'failed';
+  const receipt = bulkSaved ? '已处理 ' + bulkSaved.selected + ' 篇，实际更改 ' + bulkSaved.changed + ' 篇。' : '';
   const info = failed ? '上次构建失败，访客仍会看到上次成功发布的版本。请查看服务日志后重试。' :
     status === 'building' ? '设置已保存，正在更新公开博客。刷新本页可查看进度。' : savedId ? '文章设置已生效。' : '';
   const retry = failed ? '<form method="post" action="/account/posts">' + token(session) + field('q',query) +
     '<button name="action" value="retry">重新构建</button></form>' : '';
-  return shell('文章管理', '<section><h1>文章管理</h1>' + message(info,failed) + retry +
+  return shell('文章管理', '<section><h1>文章管理</h1>' + message(receipt) + message(info,failed) + retry +
     '<p>隐藏文章会从公开博客移除，置顶文章会排在首页列表前面。</p><p class="muted">保存后服务会自动构建，完成后即可查看。</p>' +
-    search + '</section><section><h2>' + (term ? '搜索结果' : '全部文章') + '（' + count + '）</h2>' + result +
-    '</section><a href="/account/">返回我的账户</a>',session);
+    search + '</section><section><h2>' + (term ? '搜索结果' : '全部文章') + '（' + count + '）</h2>' + (count ? bulkPostForm(session,query) : '') + result +
+    '</section><a href="/account/">返回我的账户</a>' + (count ? '<script>' + postSelectionScript + '</script>' : ''),session);
 }
 export function statusPage(title, detail, session) {
   return shell(title,'<section class="narrow"><h1>' + escape(title) + '</h1><p>' + escape(detail) + '</p><div class="actions"><a href="/account/">我的账户</a><a href="/">返回首页</a></div></section>',session);

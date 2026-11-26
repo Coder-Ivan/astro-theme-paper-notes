@@ -3,7 +3,7 @@ import { promisify } from 'node:util';
 import { accountKey, digest, editAccounts, parseAccounts, takeAttempt } from './storage.mjs';
 import { avatarSvg, defaultAvatar, isAvatar } from './avatars.mjs';
 import { createComments } from './comments.mjs';
-import { needsArticleBuild, settingChange } from './article-settings.mjs';
+import { articleAction, articleFormLimit, isArticleManagement, needsArticleBuild } from './article-settings.mjs';
 import * as ui from './ui.mjs';
 
 const derive = promisify(scrypt);
@@ -144,7 +144,10 @@ export function createService(store, {origin, now = Date.now, publisher}) {
     if (method === 'POST' && !allowForm(request,origin)) {
       return commentsRoute ? json(403,{error:'请从本站页面提交。'}) : errorPage(403,'请求未通过验证','请从本站页面重新提交表单。');
     }
-    if (method === 'POST' && Buffer.byteLength(request.body || '') > (commentsRoute ? 12288 : 4096)) {
+    const postManager = isArticleManagement(path);
+    const formLimit = postManager ? articleFormLimit : commentsRoute ? 12288 : 4096;
+    if (method === 'POST' && Buffer.byteLength(request.body || '') > formLimit) {
+      if (postManager) return errorPage(413,'提交内容过大','请减少本次选择的文章数量后再试。');
       return commentsRoute ? json(413,{error:'评论过长。'}) : errorPage(403,'请求未通过验证','请从本站页面重新提交表单。');
     }
     const form = new URLSearchParams(method === 'POST' ? request.body : '');
@@ -214,33 +217,52 @@ export function createService(store, {origin, now = Date.now, publisher}) {
       });
       return redirect('/account/login',{'Set-Cookie':cookie('',0)});
     }
-    if (path === '/account/posts' || path === '/account/posts/') {
+    if (postManager) {
       if (!session.isAdmin) return errorPage(403,'需要管理员权限','只有站主可以管理文章。',session);
       const catalog = store.threads().articles;
       if (!catalog || !publisher) return errorPage(503,'文章目录尚未就绪','请用当前版本重新构建并启动站点服务。',session);
       const query = ((method === 'POST' ? form : url.searchParams).get('q') || '').slice(0,100);
-      const settings = store.articleSettings();
       if (method !== 'POST') {
+        const settings = store.articleSettings();
         const entries = catalog.map(post => ({...post,...settings[post.id]}));
         const savedId = url.searchParams.get('post');
-        return reply(200,ui.posts(session, entries, query, publisher.status, savedId));
+        const selected = Number(url.searchParams.get('selected'));
+        const changed = Number(url.searchParams.get('changed'));
+        const bulkSaved = url.searchParams.get('saved') === '1' && url.searchParams.has('changed') &&
+          Number.isSafeInteger(selected) && selected > 0 && Number.isSafeInteger(changed) && changed >= 0 && changed <= selected
+          ? {selected,changed} : null;
+        const hash = createHash('sha256').update(ui.postSelectionScript).digest('base64');
+        return reply(200,ui.posts(session, entries, query, publisher.status, savedId, bulkSaved),htmlType,
+          {'Content-Security-Policy':csp + "; script-src 'sha256-" + hash + "'"});
       }
-      if (form.get('action') === 'retry') {
+      const mode = form.get('mode');
+      const bulk = mode === 'bulk';
+      if ((mode !== null && !bulk) || form.getAll('action').length !== 1 || form.getAll('mode').length > 1) {
+        return errorPage(400,'操作无效','请从文章管理页面选择操作。',session);
+      }
+      if (!bulk && form.get('action') === 'retry') {
         if (publisher.status === 'failed') publisher.schedule();
         return redirect('/account/posts' + (query ? '?q=' + encodeURIComponent(query) : ''));
       }
-      const id = form.get('id');
-      const post = catalog.find(entry => entry.id === id);
-      if (!post) return errorPage(404,'文章不存在','文章可能已移动或删除，请重新打开管理页面。',session);
-      const change = settingChange(id,form.get('action'));
+      const submitted = form.getAll('id');
+      if (!submitted.length || (!bulk && submitted.length !== 1)) {
+        return errorPage(400,'请选择文章','勾选要操作的文章后再提交。',session);
+      }
+      const change = articleAction(form.get('action'));
       if (!change) return errorPage(400,'操作无效','请从文章管理页面选择操作。',session);
-      if ((settings[id]?.[change.field] ?? post[change.field]) !== change.value) {
-        store.put(change.key,Buffer.from(JSON.stringify(change.value)));
+      const ids = new Set(submitted);
+      const selected = catalog.filter(post => ids.has(post.id));
+      if (selected.length !== ids.size) {
+        return errorPage(404,'文章不存在','所选文章可能已移动或删除，请重新打开管理页面。',session);
+      }
+      const changed = store.updateArticleSettings(selected,change);
+      if (changed || publisher.status === 'failed' || (publisher.status !== 'building' && needsArticleBuild(catalog,store.articleSettings()))) {
         publisher.schedule();
-      } else if (publisher.status === 'failed' || needsArticleBuild(catalog,settings)) publisher.schedule();
-      const result = new URLSearchParams({post:id});
+      }
+      const result = bulk ? new URLSearchParams({saved:'1',selected:String(selected.length),changed:String(changed)})
+        : new URLSearchParams({post:submitted[0]});
       if (query) result.set('q',query);
-      return redirect('/account/posts?' + result + '#post-' + id);
+      return redirect('/account/posts?' + result + (bulk ? '' : '#post-' + submitted[0]));
     }
     if (path === '/account/users' || path === '/account/users/') {
       if (!session.isAdmin) return errorPage(403,'需要管理员权限','只有站点管理员可以管理用户。',session);

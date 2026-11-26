@@ -4,7 +4,7 @@ import { pipeline } from 'node:stream/promises';
 import { existsSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { articlePublisher, buildArticles, recoverArticleBuild } from './publish-articles.mjs';
-import { needsArticleBuild } from './article-settings.mjs';
+import { articleFormLimit, isArticleManagement, needsArticleBuild } from './article-settings.mjs';
 import config from '../theme.config.mjs';
 import { createService } from './service.mjs';
 import { accountKey, openStore, parseAccounts } from './storage.mjs';
@@ -42,10 +42,11 @@ export function createBlogServer({origin, store, publicDir, publisher}) {
       store.refresh();
       if (/^\/(?:account|diary)(?:\/|$)/.test(path)) {
         const chunks = [];
+        const limit = isArticleManagement(path) ? articleFormLimit : 16384;
         let bytes = 0;
         for await (const chunk of req) {
           bytes += chunk.length;
-          if (bytes > 16384) { res.writeHead(413, privateHeaders).end(); return; }
+          if (bytes > limit) { res.writeHead(413, privateHeaders).end(); return; }
           chunks.push(chunk);
         }
         const reply = await handleAccount({method:req.method, path:req.url, headers:req.headers, body:Buffer.concat(chunks).toString('utf8')});
