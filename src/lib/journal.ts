@@ -276,25 +276,48 @@ export function notebookAnchor(path: string[]): string {
   return 'book-' + Buffer.from(JSON.stringify(path), 'utf8').toString('base64url');
 }
 
-export const notebooks = new Map<string, { articles: JournalPost[]; legacyAnchors: Set<string> }>();
+export interface NotebookNode {
+  title: string;
+  path: string[];
+  articles: JournalPost[];
+  count: number;
+  children: NotebookNode[];
+}
+
+function buildNotebookTree(publicPosts: JournalPost[]): NotebookNode[] {
+  const roots: NotebookNode[] = [];
+  const nodes = new Map<string, NotebookNode>();
+  for (const post of publicPosts) {
+    const path = post.notebookPath;
+    if (!path?.[0]) continue;
+    let siblings = roots;
+    for (const [index, title] of path.entries()) {
+      const prefix = path.slice(0, index + 1);
+      const key = notebookAnchor(prefix);
+      let node = nodes.get(key);
+      if (!node) {
+        node = {title, path:prefix, articles:[], count:0, children:[]};
+        nodes.set(key, node);
+        siblings.push(node);
+      }
+      node.count++;
+      if (index === path.length - 1) node.articles.push(post);
+      siblings = node.children;
+    }
+  }
+  const byTitle = (a: NotebookNode, b: NotebookNode) => a.title.localeCompare(b.title, 'zh-CN');
+  for (const node of nodes.values()) node.children.sort(byTitle);
+  return roots.sort(byTitle);
+}
+
+export const notebookTree = buildNotebookTree(posts);
+export const notebooks = new Map(notebookTree.map(node => [node.title, node]));
+export const sortedNotebooks = [...notebooks];
 export const years = new Map<string, JournalPost[]>();
 const yearFormatter = new Intl.DateTimeFormat('zh-CN', { year: 'numeric', timeZone: 'Asia/Shanghai' });
 for (const post of posts) {
-  const path = post.notebookPath;
-  if (path?.[0]) {
-    const root = path[0];
-    let group = notebooks.get(root);
-    if (!group) {
-      group = { articles: [], legacyAnchors: new Set() };
-      notebooks.set(root, group);
-    }
-    group.articles.push(post);
-    // Existing links to a nested notebook now land at its top-level category.
-    if (path.length > 1) group.legacyAnchors.add(notebookAnchor(path));
-  }
   const created = new Date(post.created);
   const year = Number.isFinite(created.getTime()) ? yearFormatter.format(created).replace(/年$/, '') : '日期未记录';
   if (!years.has(year)) years.set(year, []);
   years.get(year)!.push(post);
 }
-export const sortedNotebooks = [...notebooks].sort(([a], [b]) => a.localeCompare(b, 'zh-CN'));

@@ -1,20 +1,59 @@
 ---
 import Shell from '../layouts/Shell.astro';
 import Sidebar from '../components/Sidebar.astro';
-import ArticleList from '../components/ArticleList.astro';
-import { notebooks, sortedNotebooks, notebookAnchor } from '../lib/journal.ts';
+import NotebookNode from '../components/NotebookNode.astro';
+import { notebookTree } from '../lib/journal.ts';
+import '../styles/notebook-tree.css';
+import theme from '../../theme.config.mjs';
+
+const articleCount = notebookTree.reduce((sum, root) => sum + root.count, 0);
 ---
 <Shell title="笔记分类" active="categories">
-  <p slot="hero-meta" class="hero-meta">共 {notebooks.size} 个一级分类</p>
+  <p slot="hero-meta" class="hero-meta">{notebookTree.length} 个一级分类<span>·</span>{articleCount} 篇公开文章</p>
   <main class="frame columns" id="main">
-    <div class="panel directory">
-      {notebooks.size > 0 ? <>
-        <nav aria-label="分类索引" class="index-links">{sortedNotebooks.map(([title, book]) => <a href={'#' + notebookAnchor([title])}>{title}<small>{book.articles.length}</small></a>)}</nav>
-        {sortedNotebooks.map(([title, book]) => <section class="directory-group" id={notebookAnchor([title])}>
-          <h2>{title}</h2><ArticleList articles={book.articles} />
-        </section>)}
-      </> : <p>暂无笔记本分类。</p>}
+    <div class="panel notebook-browser" data-diary-enabled={theme.services ? '' : undefined}>
+      {notebookTree.length > 0
+        ? <ul class="notebook-tree" aria-label="笔记本分类">{notebookTree.map(node => <NotebookNode node={node} />)}</ul>
+        : <p>暂无笔记本分类。</p>}
     </div>
-    <Sidebar/>
+    <Sidebar />
   </main>
+  <script>
+    function followNotebookHash() {
+      const match = /^#book-([\w-]+)$/.exec(location.hash);
+      if (!match) return;
+      const target = document.getElementById(location.hash.slice(1));
+      if (target instanceof HTMLDetailsElement && target.classList.contains('notebook-node')) {
+        let branch: HTMLDetailsElement | null = target;
+        while (branch) {
+          branch.open = true;
+          branch = branch.parentElement?.closest<HTMLDetailsElement>('details.notebook-node') ?? null;
+        }
+        const summary = target.querySelector('summary');
+        summary?.focus({ preventScroll: true });
+        summary?.scrollIntoView({ block: 'start' });
+        return;
+      }
+      // Links from before the diary moved to its own calendar use the same encoding.
+      if (!document.querySelector('.notebook-browser[data-diary-enabled]')) return;
+      let path: unknown;
+      try {
+        const bytes = atob(match[1].replace(/-/g, '+').replace(/_/g, '/'));
+        path = JSON.parse(new TextDecoder().decode(Uint8Array.from(bytes, c => c.charCodeAt(0))));
+      } catch { return; }
+      if (!Array.isArray(path) || path[0] !== 'Journal') return;
+      const month = /^(0[1-9]|1[0-2])(?:-|$)/.exec(String(path[2] ?? ''));
+      const query = /^\d{4}$/.test(path[1]) && month ? '?month=' + path[1] + '-' + month[1] : '';
+      location.replace('/diary/' + query);
+    }
+    followNotebookHash();
+    window.addEventListener('hashchange', followNotebookHash);
+    window.addEventListener('pageshow', event => { if (event.persisted) followNotebookHash(); });
+    // A reader can close the current target and follow the same sidebar link again.
+    document.addEventListener('click', event => {
+      if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      const link = event.target instanceof Element && event.target.closest('a');
+      if (link && link.hash && link.href === location.href) followNotebookHash();
+    });
+  </script>
 </Shell>

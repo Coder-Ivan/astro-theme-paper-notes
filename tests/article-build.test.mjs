@@ -68,12 +68,14 @@ test('hidden articles leave the public build and pinned articles move ahead of p
   const contents = async (base, name) => readFile(join(site,base,name),'utf8');
   const category = join(site,'content/Field');
   await mkdir(category,{recursive:true});
+  const nested = join(category,'Plants','Buds');
+  await mkdir(nested,{recursive:true});
   await mkdir(join(site,'content/Journal'));
   await writeFile(join(site,'content/Journal/diary.md'),'---\ntitle: Private diary\nslug: diary-sample\npinned: true\nhidden: true\n---\nDiary sample body\n\n' + codeExamples);
   await writeFile(join(category,'early.md'),'---\ntitle: Early observation\nslug: early\ndate: 2001-01-01\npinned: true\n---\nEarly observation body.\n\n' + codeExamples);
   for (let i=1; i<=10; i++) {
     const day = String(i).padStart(2,'0');
-    await writeFile(join(category,'entry-'+day+'.md'),'---\ntitle: Entry '+day+'\nslug: entry-'+day+'\ndate: 2024-05-'+day+'\n---\n' +
+    await writeFile(join(i === 1 ? nested : category,'entry-'+day+'.md'),'---\ntitle: Entry '+day+'\nslug: entry-'+day+'\ndate: 2024-05-'+day+'\n---\n' +
       '[Secret label](/posts/hidden-sample/) and [another private label](/posts/%68idden-sample/index.html?test=1#part).');
   }
   const imported = join(site,'export');
@@ -91,6 +93,17 @@ test('hidden articles leave the public build and pinned articles move ahead of p
 
   const search = JSON.parse(await contents('dist','assets/search.json'));
   assertCodeExamples(await contents('dist','posts/early/index.html'), search.find(post => post.url === '/posts/early/').text);
+  const categories = parse(await contents('dist','categories/index.html'));
+  const categoryNode = (...path) => querySelector(categories,
+    'details#book-' + Buffer.from(JSON.stringify(path)).toString('base64url'));
+  for (const path of [['Field'], ['Notebook'], ['Field','Plants'], ['Field','Plants','Buds']]) {
+    const node = categoryNode(...path);
+    assert.ok(node, path.join('/'));
+    assert.equal(Object.hasOwn(node.attributes,'open'), path.length === 1, path.join('/'));
+  }
+  const nestedPost = 'a[href="/posts/entry-01/"]';
+  assert.ok(querySelector(categoryNode('Field','Plants','Buds'), nestedPost));
+  assert.equal(querySelectorAll(categories, nestedPost).length, 1);
   const home = await contents('dist','index.html');
   assert.match(home,/href="\/posts\/early\/"/);
   assert.ok(home.indexOf('/posts/early/') < home.indexOf('/posts/entry-10/'));

@@ -6,7 +6,7 @@ import NavIcon from './NavIcon.astro';
 interface Props { post?: JournalPost }
 const { post } = Astro.props;
 const author = theme.author;
-const popular = [...sortedNotebooks].sort((a, b) => b[1].articles.length - a[1].articles.length).slice(0, 5);
+const popular = [...sortedNotebooks].sort((a, b) => b[1].count - a[1].count).slice(0, 5);
 const summary = [
   { name: '文章', count: posts.length, href: '/archives/' },
   ...(notebooks.size ? [{ name: '分类', count: notebooks.size, href: '/categories/' }] : []),
@@ -30,7 +30,7 @@ const summary = [
   </section>
   {popular.length > 0 && <section class="panel side-panel">
     <h2>笔记分类</h2>
-    <ul>{popular.map(([title, book]) => <li><a href={'/categories/#' + notebookAnchor([title])}><span>{title}</span><small>{book.articles.length}</small></a></li>)}</ul>
+    <ul>{popular.map(([title, book]) => <li><a href={'/categories/#' + notebookAnchor([title])}><span>{title}</span><small>{book.count}</small></a></li>)}</ul>
     <a class="side-more" href="/categories/">所有分类</a>
   </section>}
   {!post && years.size > 0 && <section class="panel side-panel">
