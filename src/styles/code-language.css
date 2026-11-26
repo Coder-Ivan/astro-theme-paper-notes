@@ -1,17 +1,47 @@
 .prose .code-block {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
   margin-block: 1.25em;
   min-width: 0;
   color: #edf5f3;
   background: #243a41;
   border-radius: 6px;
 }
+.prose .code-block > pre, .prose .code-line-numbers {
+  font: .89em/1.6 "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+  padding-block: 18px;
+}
 .prose .code-block > pre {
+  grid-column: 2;
+  min-width: 0;
   margin: 0;
   max-width: 100%;
 }
-.prose .code-block > pre code { white-space: pre; overflow-wrap: normal; }
+.prose .code-block > pre code {
+  display: block;
+  min-block-size: 1lh;
+  font: inherit;
+  white-space: pre;
+  overflow-wrap: normal;
+}
+.prose .code-line-numbers {
+  grid-column: 1;
+  padding-inline: .8em;
+  border-inline-end: 1px solid #425c60;
+  color: #a8bdb9;
+  font-variant-numeric: tabular-nums;
+  text-align: end;
+  white-space: pre;
+  user-select: none;
+  -webkit-user-select: none;
+  pointer-events: none;
+}
+.prose .code-line-numbers::before { content: attr(data-lines); }
+.prose .code-line-numbers:not([hidden]) + pre { padding-inline-start: 1em; }
 .prose .code-toolbar {
+  grid-column: 1 / -1;
   display: flex;
+  justify-content: flex-end;
   align-items: center;
   flex-wrap: wrap;
   gap: .35rem .75rem;
@@ -23,14 +53,23 @@
   font: 500 .85rem/1.4 var(--sans, system-ui, sans-serif);
   user-select: none;
 }
-.prose .code-toolbar label { margin-inline-end: auto; }
+.prose .code-toolbar > label[for] { margin-inline-end: auto; }
+.prose .code-lines-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: .35em;
+  min-height: 2.25rem;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.prose .code-lines-toggle input { margin: 0; accent-color: #bddfd4; cursor: pointer; }
+.prose .code-lines-toggle input:focus-visible { outline: 2px solid #c0dfd3; outline-offset: 2px; }
 .prose .code-controls {
   display: flex;
   align-items: center;
   gap: .45rem;
   min-width: 0;
   max-width: 100%;
-  margin-inline-start: auto;
 }
 .prose .code-toolbar select, .prose .code-copy {
   font: inherit;

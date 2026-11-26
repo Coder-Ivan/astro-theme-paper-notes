@@ -90,9 +90,14 @@ const renderCode: NonNullable<typeof md.renderer.rules.fence> = (tokens, index, 
   // Identical snippets can occur twice in one article and have separate reader preferences.
   const occurrence = (env.codeOccurrences.get(digest) || 0) + 1;
   env.codeOccurrences.set(digest, occurrence);
-  return '<div class="code-block" data-code-block="' + digest + '-' + occurrence +
+  const blockKey = digest + '-' + occurrence;
+  // Markdown terminates the last source line with a newline, including blank lines.
+  const lineCount = token.content.replace(/\n$/, '').split('\n').length;
+  const numbers = Array.from({ length: lineCount }, (_, i) => i + 1).join('\n');
+  return '<div class="code-block" data-code-block="' + blockKey +
     '" data-language="' + language + '" data-source="' + (declared ? 'explicit' : 'auto') +
-    '"><pre><code class="hljs language-' + language + '">' + html + '</code></pre></div>\n';
+    '"><span class="code-line-numbers" id="code-lines-' + blockKey + '" aria-hidden="true" data-lines="' + numbers +
+    '"></span><pre><code class="hljs language-' + language + '">' + html + '</code></pre></div>\n';
 };
 md.renderer.rules.fence = renderCode;
 md.renderer.rules.code_block = renderCode;

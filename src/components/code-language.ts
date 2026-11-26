@@ -60,6 +60,29 @@ function addCopyButton(controls: HTMLElement, toolbar: HTMLElement, code: HTMLEl
   });
 }
 
+function createLineToggle(gutter: HTMLElement, storageKey: string, blockNumber: number) {
+  const label = document.createElement('label');
+  label.className = 'code-lines-toggle';
+  const checkbox = document.createElement('input');
+  checkbox.type = 'checkbox';
+  checkbox.setAttribute('aria-label', '第 ' + blockNumber + ' 个代码块的行号');
+  checkbox.setAttribute('aria-controls', gutter.id);
+  label.append(checkbox, '行号');
+
+  try {
+    gutter.hidden = localStorage.getItem(storageKey) === 'hidden';
+  } catch { /* Keep the default when local storage is unavailable. */ }
+  checkbox.checked = !gutter.hidden;
+  checkbox.addEventListener('change', () => {
+    gutter.hidden = !checkbox.checked;
+    try {
+      if (gutter.hidden) localStorage.setItem(storageKey, 'hidden');
+      else localStorage.removeItem(storageKey);
+    } catch { /* The switch also works without persistence. */ }
+  });
+  return label;
+}
+
 function enableLanguagePicker(block: HTMLElement, code: HTMLElement, articleKey: string, index: number) {
   const initialLanguage = block.dataset.language || 'plaintext';
   const initialLabel = codeLanguages.find(language => language.id === initialLanguage)?.label || '纯文本';
@@ -85,7 +108,13 @@ function enableLanguagePicker(block: HTMLElement, code: HTMLElement, articleKey:
   const controls = document.createElement('div');
   controls.className = 'code-controls';
   controls.append(select);
-  toolbar.append(label,message,controls);
+  toolbar.append(label, message);
+  const gutter = block.querySelector<HTMLElement>(':scope > .code-line-numbers');
+  if (gutter) {
+    const lineKey = 'paper-notes:code-lines:' + articleKey + ':' + block.dataset.codeBlock;
+    toolbar.append(createLineToggle(gutter, lineKey, index + 1));
+  }
+  toolbar.append(controls);
   addCopyButton(controls,toolbar,code);
   block.prepend(toolbar);
 
