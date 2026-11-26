@@ -1,5 +1,65 @@
 import { codeLanguages } from '../lib/code-languages.mjs';
 
+async function copyPlainText(text: string) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+  // Older browsers can receive plain text through a user-initiated copy event.
+  let written = false;
+  function write(event: ClipboardEvent) {
+    event.preventDefault();
+    if (event.clipboardData) {
+      event.clipboardData.setData('text/plain',text);
+      written = true;
+    }
+  }
+  document.addEventListener('copy',write,true);
+  try {
+    if (!document.execCommand('copy') || !written) throw new Error('Clipboard unavailable');
+  } finally {
+    document.removeEventListener('copy',write,true);
+  }
+}
+
+function addCopyButton(controls: HTMLElement, toolbar: HTMLElement, code: HTMLElement) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'code-copy';
+  button.textContent = '复制代码';
+  const status = document.createElement('span');
+  status.className = 'code-copy-status';
+  status.setAttribute('role','status');
+  controls.append(button);
+  toolbar.append(status);
+
+  let latest = 0;
+  let resetTimer: number;
+  function reset() {
+    button.textContent = '复制代码';
+    status.textContent = '';
+    status.classList.remove('is-error');
+  }
+  button.addEventListener('click', async () => {
+    const request = ++latest;
+    window.clearTimeout(resetTimer);
+    reset();
+    try {
+      await copyPlainText(code.textContent ?? '');
+    } catch {
+      if (request === latest) {
+        status.classList.add('is-error');
+        status.textContent = '复制失败，请手动选中代码后复制。';
+      }
+      return;
+    }
+    if (request !== latest) return;
+    button.textContent = '已复制';
+    status.textContent = '已复制';
+    resetTimer = window.setTimeout(reset,2000);
+  });
+}
+
 function enableLanguagePicker(block: HTMLElement, code: HTMLElement, articleKey: string, index: number) {
   const initialLanguage = block.dataset.language || 'plaintext';
   const initialLabel = codeLanguages.find(language => language.id === initialLanguage)?.label || '纯文本';
@@ -22,7 +82,11 @@ function enableLanguagePicker(block: HTMLElement, code: HTMLElement, articleKey:
   const message = document.createElement('span');
   message.className = 'code-status';
   message.setAttribute('role','status');
-  toolbar.append(label,message,select);
+  const controls = document.createElement('div');
+  controls.className = 'code-controls';
+  controls.append(select);
+  toolbar.append(label,message,controls);
+  addCopyButton(controls,toolbar,code);
   block.prepend(toolbar);
 
   let displayed = initialChoice;
