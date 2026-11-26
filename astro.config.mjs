@@ -29,8 +29,9 @@ const separatePrivatePages = {
     },
     async 'astro:build:done'({ dir }) {
       const rendered = fileURLToPath(dir);
-      const publicDir = join(root, 'dist');
-      const privateDir = join(root, 'dist-private');
+      const destination = process.env.PAPER_NOTES_BUILD_DEST || root;
+      const publicDir = join(destination, 'dist');
+      const privateDir = join(destination, 'dist-private');
       if (!theme.services && (await readdir(rendered)).includes('diary')) {
         throw new Error('The /diary/ path is private. Remove it from the public content before publishing.');
       }

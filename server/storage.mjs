@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { storedSettings } from './article-settings.mjs';
 import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -34,7 +35,7 @@ export function openStore(directory, release) {
     }
     const threads = release.threads();
     if (previousThreads === threads) return threads;
-    const liveIds = new Set([...Object.values(threads.public), ...Object.values(threads.diary)]);
+    const liveIds = new Set([...Object.values(threads.public), ...Object.values(threads.diary), ...(threads.articles || []).map(post => post.id)]);
     // Keep histories separate on visibility moves; purge both when an article is deleted.
     db.exec('BEGIN IMMEDIATE');
     try {
@@ -53,6 +54,7 @@ export function openStore(directory, release) {
 
   return {
     threads: refresh,
+    articleSettings: () => storedSettings(db),
     readDiary: key => release.readDiary(key),
     refresh,
     close: () => db.close(),
@@ -71,6 +73,7 @@ export function openStore(directory, release) {
         const id = filename.slice(0, -'.ndjson'.length);
         const index = refresh()[audience === 'diary' ? 'diary' : 'public'];
         if (!Object.values(index).includes(id)) return false;
+        if (audience === 'article' && storedSettings(db)[id]?.hidden) return false;
       }
       if (offset) return extend.run(data, key, offset).changes === 1;
       const rate = /^auth\/(?:attempts\/(?:register\/)?|comments\/limits\/)(\d+)\//.exec(key);

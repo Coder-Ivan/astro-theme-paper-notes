@@ -8,7 +8,7 @@
     "node": ">=24.0.0"
   },
   "scripts": {
-    "test": "node --test server/tests/services.test.mjs",
+    "test": "node --test server/tests/*.test.mjs tests/*.test.mjs",
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview",

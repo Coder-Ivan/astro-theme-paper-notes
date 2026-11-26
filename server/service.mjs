@@ -3,6 +3,7 @@ import { promisify } from 'node:util';
 import { accountKey, digest, editAccounts, parseAccounts, takeAttempt } from './storage.mjs';
 import { avatarSvg, defaultAvatar, isAvatar } from './avatars.mjs';
 import { createComments } from './comments.mjs';
+import { needsArticleBuild, settingChange } from './article-settings.mjs';
 import * as ui from './ui.mjs';
 
 const derive = promisify(scrypt);
@@ -45,7 +46,7 @@ const redirect = (location, extra = {}) => reply(303,'',htmlType,{Location:locat
 function nextPath(raw, fallback = '/account/') {
   if (!raw || raw.length > 280 || /[\s\\]/.test(raw) || raw.includes('..') || raw.includes('//')) return fallback;
   if (/^\/(?:diary\/)?posts\/[a-z0-9-]+\/(?:#(?:comments|reply-[a-f0-9]{32}-[a-f0-9]{32}))?$/.test(raw)) return raw;
-  if (!/^\/(?:account(?:\/(?:users)?)?|diary(?:\/[a-z0-9/_\-.]*)?)$/.test(raw)) return fallback;
+  if (!/^\/(?:account(?:\/(?:users|posts))?\/?|diary(?:\/[a-z0-9/_\-.]*)?)$/.test(raw)) return fallback;
   return raw;
 }
 function allowForm(request, origin) {
@@ -62,7 +63,7 @@ const anonymous = {authenticated:false, canReadDiary:false, isAdmin:false};
 class FormError extends Error {}
 const errorPage = (status,title,detail,session) => reply(status,ui.statusPage(title,detail,session));
 
-export function createService(store, {origin, now = Date.now}) {
+export function createService(store, {origin, now = Date.now, publisher}) {
   const secure = new URL(origin).protocol === 'https:';
   const cookieName = secure ? '__Host-paper_session' : 'paper_notes_local';
   const cookie = (value, age) => cookieName + '=' + value + '; Path=/; HttpOnly; SameSite=Lax; Max-Age=' + age + (secure ? '; Secure' : '');
@@ -212,6 +213,34 @@ export function createService(store, {origin, now = Date.now}) {
         return {...current,password,revision:random()};
       });
       return redirect('/account/login',{'Set-Cookie':cookie('',0)});
+    }
+    if (path === '/account/posts' || path === '/account/posts/') {
+      if (!session.isAdmin) return errorPage(403,'需要管理员权限','只有站主可以管理文章。',session);
+      const catalog = store.threads().articles;
+      if (!catalog || !publisher) return errorPage(503,'文章目录尚未就绪','请用当前版本重新构建并启动站点服务。',session);
+      const query = ((method === 'POST' ? form : url.searchParams).get('q') || '').slice(0,100);
+      const settings = store.articleSettings();
+      if (method !== 'POST') {
+        const entries = catalog.map(post => ({...post,...settings[post.id]}));
+        const savedId = url.searchParams.get('post');
+        return reply(200,ui.posts(session, entries, query, publisher.status, savedId));
+      }
+      if (form.get('action') === 'retry') {
+        if (publisher.status === 'failed') publisher.schedule();
+        return redirect('/account/posts' + (query ? '?q=' + encodeURIComponent(query) : ''));
+      }
+      const id = form.get('id');
+      const post = catalog.find(entry => entry.id === id);
+      if (!post) return errorPage(404,'文章不存在','文章可能已移动或删除，请重新打开管理页面。',session);
+      const change = settingChange(id,form.get('action'));
+      if (!change) return errorPage(400,'操作无效','请从文章管理页面选择操作。',session);
+      if ((settings[id]?.[change.field] ?? post[change.field]) !== change.value) {
+        store.put(change.key,Buffer.from(JSON.stringify(change.value)));
+        publisher.schedule();
+      } else if (publisher.status === 'failed' || needsArticleBuild(catalog,settings)) publisher.schedule();
+      const result = new URLSearchParams({post:id});
+      if (query) result.set('q',query);
+      return redirect('/account/posts?' + result + '#post-' + id);
     }
     if (path === '/account/users' || path === '/account/users/') {
       if (!session.isAdmin) return errorPage(403,'需要管理员权限','只有站点管理员可以管理用户。',session);

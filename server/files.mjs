@@ -56,6 +56,24 @@ export function buildReader(publicDir, privateDir) {
           throw new Error('Build and discussion manifest differ; finish the build and restart the service.');
         }
       }
+      if (next.articles !== undefined) {
+        if (!Array.isArray(next.articles)) throw new Error('Invalid article catalog.');
+        const ids = new Set();
+        const slugs = new Set();
+        const diaryIds = new Set(Object.values(next.diary));
+        for (const post of next.articles) {
+          if (!post || !/^[a-f0-9]{32}$/.test(post.id) || !/^[a-z0-9-]+$/.test(post.slug) ||
+              typeof post.title !== 'string' || typeof post.category !== 'string' ||
+              typeof post.hidden !== 'boolean' || typeof post.pinned !== 'boolean' ||
+              ids.has(post.id) || slugs.has(post.slug) || diaryIds.has(post.id) || Object.hasOwn(next.diary,post.slug) ||
+              (post.hidden ? Object.hasOwn(next.public,post.slug) : next.public[post.slug] !== post.id)) {
+            throw new Error('Article catalog and discussion manifest differ.');
+          }
+          ids.add(post.id);
+          slugs.add(post.slug);
+        }
+        if (Object.keys(next.public).some(slug => !slugs.has(slug))) throw new Error('Incomplete article catalog.');
+      }
       previous = raw;
       current = next;
       return current;

@@ -3,6 +3,7 @@ import { katex } from '@mdit/plugin-katex';
 import GithubSlugger from 'github-slugger';
 import config from '../../theme.config.mjs';
 import { readContent } from '../../scripts/content.mjs';
+import { readArticleSettings } from '../../server/article-settings.mjs';
 
 const { notes: source, assets } = await readContent();
 export { assets };
@@ -15,6 +16,8 @@ interface ExportedPost {
   updated: string;
   tags: string[];
   notebookPath?: string[];
+  hidden?: boolean;
+  pinned?: boolean;
   body: string;
 }
 
@@ -38,7 +41,10 @@ md.inline.ruler.before('html_inline', 'joplin-inline', (state, silent) => {
   const link = /^<a\s+href=(["'])([^"'<>]+)\1(?:\s+target=(["'])_[a-z]+\3)?\s*>([^<>\n]+)<\/a>/i.exec(remaining);
   const match = br || anchor || link;
   if (!match) return false;
-  const href = link ? md.normalizeLink(md.utils.unescapeAll(link[2])) : '';
+  let href = link ? md.normalizeLink(md.utils.unescapeAll(link[2])) : '';
+  const internal = /^:\/([a-f0-9]{32})([?#].*)?$/i.exec(href);
+  const target = internal && notesById.get(internal[1].toLowerCase());
+  if (internal && target) href = postUrl(target) + (internal[2] || '');
   if (link && !md.validateLink(href)) return false;
   if (!silent) {
     if (br) {
@@ -116,7 +122,17 @@ function outlineHeadings(tokens: Token[]): JournalPost['headings'] {
   });
 }
 
-const diarySlugs = new Set(source.filter(isDiary).map((post: ExportedPost) => post.slug));
+const overrides = config.services ? readArticleSettings() : {};
+const notes: ExportedPost[] = source.map((note: ExportedPost) => isDiary(note)
+  ? { ...note, hidden: false, pinned: false }
+  : { ...note, ...overrides[note.id] });
+export const articleCatalog = notes.filter(note => !isDiary(note)).map(note => ({
+  id: note.id, slug: note.slug, title: note.title, category: note.notebookPath?.[0] ?? '',
+  hidden: note.hidden ?? false, pinned: note.pinned ?? false,
+}));
+const notesById = new Map(notes.map(note => [note.id, note]));
+const hiddenSlugs = new Set(notes.filter(note => note.hidden).map(note => note.slug));
+const diarySlugs = new Set(notes.filter(isDiary).map(note => note.slug));
 const siteOrigin = new URL(config.site || 'https://example.invalid').origin;
 
 function restrictLinks(tokens: Token[], diary: boolean) {
@@ -130,15 +146,16 @@ function restrictLinks(tokens: Token[], diary: boolean) {
         // URL path segments can spell ASCII slug characters with percent escapes.
         const path = url.pathname.replace(/%([0-9a-f]{2})/gi, (original, code) => {
           const character = String.fromCharCode(parseInt(code, 16));
-          return /[a-z0-9-]/i.test(character) ? character : original;
+          return /[a-z0-9.-]/i.test(character) ? character : original;
         });
-        const slug = /^\/(?:diary\/)?posts\/([a-z0-9-]+)\/?$/.exec(path)?.[1];
+        const slug = /^\/(?:diary\/)?posts\/([a-z0-9-]+)(?:\/index\.html|\/)?$/.exec(path)?.[1];
+        const hiddenPost = slug && hiddenSlugs.has(slug);
         const privatePost = slug && diarySlugs.has(slug);
-        if (!diary && (privatePost || path === '/diary' || path.startsWith('/diary/'))) {
+        if (hiddenPost || (!diary && (privatePost || path === '/diary' || path.startsWith('/diary/')))) {
           // A Joplin note link normally uses the target's title as its label.
           if (token.type === 'link_open') {
             const end = tokens.findIndex((next, n) => n > i && next.type === 'link_close');
-            if (end < 0) throw new Error('文章中的日记链接格式无效。');
+            if (end < 0) throw new Error('文章中的内部链接格式无效。');
             tokens.splice(i + 1, end - i);
           }
           token.type = 'text';
@@ -146,7 +163,7 @@ function restrictLinks(tokens: Token[], diary: boolean) {
           token.nesting = 0;
           token.attrs = null;
           token.children = null;
-          token.content = '受限日记';
+          token.content = hiddenPost ? '未公开文章' : '受限日记';
         } else if (privatePost) {
           token.attrSet(attribute, '/diary/posts/' + slug + '/' + url.search + url.hash);
         } else if (diary && /^\/media\/[a-f0-9]{64}(?:\.[a-z0-9]{1,16})?$/.test(url.pathname)) {
@@ -154,7 +171,12 @@ function restrictLinks(tokens: Token[], diary: boolean) {
         }
       }
     }
-    if (token.children) restrictLinks(token.children, diary);
+    if (token.children) {
+      restrictLinks(token.children, diary);
+      if (token.type === 'image') {
+        token.content = md.renderer.renderInlineAsText(token.children, md.options, {});
+      }
+    }
   }
 }
 
@@ -188,7 +210,7 @@ function preparePost(post: ExportedPost): JournalPost {
   return { ...post, cover, excerpt, headings, hasMermaid, html: md.renderer.render(tokens, md.options, env) };
 }
 
-const allPosts: JournalPost[] = source.map(preparePost).sort((a: JournalPost, b: JournalPost) =>
+const allPosts: JournalPost[] = notes.filter(post => !post.hidden).map(preparePost).sort((a: JournalPost, b: JournalPost) =>
   (Date.parse(b.created) || 0) - (Date.parse(a.created) || 0) || a.title.localeCompare(b.title, 'zh-CN')
 );
 
@@ -198,6 +220,7 @@ export function isDiary(post: Pick<JournalPost, 'notebookPath'>): boolean {
 
 export const diaryPosts = allPosts.filter(isDiary);
 export const posts = allPosts.filter(post => !isDiary(post));
+export const feedPosts = [...posts.filter(post => post.pinned), ...posts.filter(post => !post.pinned)];
 
 export function postUrl(post: Pick<ExportedPost, 'slug' | 'notebookPath'>): string {
   return (isDiary(post) ? '/diary/posts/' : '/posts/') + encodeURIComponent(post.slug) + '/';

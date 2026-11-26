@@ -13,6 +13,7 @@ async function publishedNoteId(store, audience, slug) {
   const index = audience === 'diary' ? threads.diary : threads.public;
   if (!Object.hasOwn(index,slug) || (audience === 'article' && Object.hasOwn(threads.diary,slug))) return null;
   if (typeof index[slug] !== 'string' || !/^[0-9a-f]{32}$/.test(index[slug])) throw new Error('Invalid comment note ID');
+  if (audience === 'article' && store.articleSettings()[index[slug]]?.hidden) return null;
   return index[slug];
 }
 

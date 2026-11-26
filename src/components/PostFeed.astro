@@ -3,23 +3,23 @@ import Shell from '../layouts/Shell.astro';
 import theme from '../../theme.config.mjs';
 import PostMeta from './PostMeta.astro';
 import Sidebar from './Sidebar.astro';
-import { posts, postUrl, pageSize, pageCount, pageUrl } from '../lib/journal.ts';
+import { feedPosts, postUrl, pageSize, pageCount, pageUrl } from '../lib/journal.ts';
 interface Props { page?: number }
 const { page = 1 } = Astro.props;
-const articles = posts.slice((page - 1) * pageSize, page * pageSize);
+const articles = feedPosts.slice((page - 1) * pageSize, page * pageSize);
 const pages = Array.from({ length: pageCount }, (_, i) => i + 1).filter(n => n === 1 || n === pageCount || Math.abs(n - page) <= 1);
 const heading = page === 1 ? theme.title : '文章列表';
 ---
 <Shell active="posts" home={page === 1} title={page === 1 ? undefined : '文章 · 第 ' + page + ' 页'} heading={heading}>
-  <p slot="hero-meta" class="hero-meta">{page === 1 ? theme.description || '共 ' + posts.length + ' 篇文章' : '第 ' + page + ' 页'}</p>
+  <p slot="hero-meta" class="hero-meta">{page === 1 ? theme.description || '共 ' + feedPosts.length + ' 篇文章' : '第 ' + page + ' 页'}</p>
   <main class="frame columns" id="main">
     <div class="feed">
-      <h2 class="section-title">{page === 1 ? '最新文章' : '文章列表'}</h2>
+      <h2 class="section-title">{page === 1 && !articles[0]?.pinned ? '最新文章' : '文章列表'}</h2>
       {articles.length === 0 && <p class="panel empty">暂无文章。</p>}
       {articles.map((post, i) => <article class:list={['panel', 'post-card', { illustrated: !!post.cover, reverse: i % 2 === 1 }]}>
         {post.cover && <a class="post-image" tabindex="-1" aria-hidden="true" href={postUrl(post)}><img src={post.cover.src} alt="" loading="lazy" decoding="async" /></a>}
         <div class="post-copy">
-          <PostMeta post={post} />
+          <PostMeta post={post}>{post.pinned && <strong>置顶</strong>}</PostMeta>
           <h3><a href={postUrl(post)}>{post.title}</a></h3>
           {post.excerpt && <p class="excerpt">{post.excerpt.slice(0, 210)}</p>}
         </div>

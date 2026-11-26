@@ -3,6 +3,8 @@ import { extname, join, resolve } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { existsSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
+import { articlePublisher, buildArticles, recoverArticleBuild } from './publish-articles.mjs';
+import { needsArticleBuild } from './article-settings.mjs';
 import config from '../theme.config.mjs';
 import { createService } from './service.mjs';
 import { accountKey, openStore, parseAccounts } from './storage.mjs';
@@ -20,9 +22,9 @@ const inlineMedia = new Set(['png','jpg','jpeg','webp','avif','gif','pdf','mp3',
 const privateHeaders = {'Cache-Control':'private, no-store', 'X-Content-Type-Options':'nosniff'};
 const loopback = new Set(['127.0.0.1','localhost','[::1]','::1']);
 
-export function createBlogServer({origin, store, publicDir}) {
+export function createBlogServer({origin, store, publicDir, publisher}) {
   const canonical = new URL(origin);
-  const handleAccount = createService(store, {origin: canonical.origin});
+  const handleAccount = createService(store, {origin:canonical.origin, publisher});
   return createServer({requestTimeout: 30000, headersTimeout: 15000}, async (req, res) => {
     try {
       if (req.headers.host !== canonical.host) {
@@ -96,6 +98,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
       !(site.protocol === 'http:' && loopback.has(host) && loopback.has(site.hostname)))) {
     throw new Error('PUBLIC_ORIGIN must be the exact external HTTPS origin, or a loopback HTTP origin for local development.');
   }
+  const root = resolve('.');
+  recoverArticleBuild(root);
   const publicDir = resolve('dist');
   const privateDir = resolve('dist-private');
   if (!existsSync(join(publicDir,'index.html')) || existsSync(join(publicDir,'diary'))) {
@@ -107,7 +111,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
     store.close();
     throw new Error('Initialize the site owner first: node server/owner.mjs <username>');
   }
-  const server = createBlogServer({origin, store, publicDir});
+  const publisher = articlePublisher(isCurrent => buildArticles(root,isCurrent));
+  if (needsArticleBuild(store.threads().articles || [],store.articleSettings())) publisher.schedule();
+  const server = createBlogServer({origin, store, publicDir, publisher});
   server.listen(port, host, () => console.log('Paper Notes: ' + origin));
   server.on('close', () => store.close());
   for (const event of ['SIGTERM','SIGINT']) process.once(event, () => server.close());

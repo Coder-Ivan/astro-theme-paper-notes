@@ -67,8 +67,13 @@ function noteFrom(text, relative, imported, rootName) {
   if (meta.tags !== undefined && !(Array.isArray(meta.tags) && meta.tags.every(tag => typeof tag === 'string'))) {
     throw new Error('tags must be a list of names in ' + relative);
   }
+  for (const field of ['hidden', 'pinned']) {
+    if (meta[field] !== undefined && typeof meta[field] !== 'boolean') {
+      throw new Error(field + ' must be true or false in ' + relative);
+    }
+  }
   return { id:id.toLowerCase(), slug, title, created:iso(meta.created ?? meta.date), updated:iso(meta.updated),
-    tags:meta.tags ?? [], notebookPath, body };
+    tags:meta.tags ?? [], notebookPath, body, hidden:meta.hidden ?? false, pinned:meta.pinned ?? false };
 }
 
 export async function readNotebook(directory, {imported = false} = {}) {
@@ -83,8 +88,14 @@ export async function readNotebook(directory, {imported = false} = {}) {
     if (notes.has(key)) throw new Error('Duplicate normalized note path: ' + relative);
     notes.set(key, noteFrom(await readFile(file, 'utf8'), relative, imported, path.basename(root)));
   }
+  const notesById = new Map([...notes.values()].map(note => [note.id, note]));
   async function rewrite(from, note, url) {
     if (/^(?:https?:|mailto:|tel:|\/\/|#|\?|$)/i.test(url)) return url;
+    const noteId = /^:\/([a-f0-9]{32})([?#].*)?$/i.exec(url);
+    if (noteId) {
+      const target = notesById.get(noteId[1].toLowerCase());
+      if (target) return (target.notebookPath[0] === 'Journal' ? '/diary' : '') + '/posts/' + target.slug + '/' + (noteId[2] || '');
+    }
     if (/^\/(?:Users|home|Volumes|private)\//.test(url) || /^(?:[a-z][a-z0-9+.-]*:|:\/|\\)/i.test(url)) {
       throw new Error('Unresolved or non-portable URL; export the linked notes and resources together.');
     }

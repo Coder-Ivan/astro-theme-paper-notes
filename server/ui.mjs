@@ -21,10 +21,14 @@ button.secondary,.button.secondary{color:#255850;background:#f7faf8;border-color
 :focus-visible{outline:3px solid #438980;outline-offset:3px}.notice,.error,.credential{padding:.85rem 1rem;border-radius:.45rem;margin-bottom:1rem}.notice,.credential{background:#edf5f0;color:#244f44}.error{background:#faeee9;color:#803c32}
 .credential code{font:1rem/1.5 ui-monospace,monospace;overflow-wrap:anywhere;user-select:all}.credential p:last-child{margin:0}.muted{color:#566b69}.list{display:grid;gap:.9rem}.user{border-top:1px solid #dce5e2;padding-top:1rem}.user form{display:flex;align-items:end;gap:.5rem;flex-wrap:wrap}.user label{margin:0}.user-name{font-weight:700;margin-bottom:.35rem;overflow-wrap:anywhere}
 .identity{display:flex;align-items:center;gap:.8rem;margin-bottom:1.15rem}.identity p{margin:0;overflow-wrap:anywhere}.form-foot{margin-top:1.25rem}.user .identity{margin-bottom:.65rem}
+.post-search{display:flex;align-items:end;flex-wrap:wrap;gap:.65rem}.post-search label{flex:1 1 16rem;min-width:0;margin:0}.post-search .actions{min-height:2.75rem}
+.post-group{border-block-start:1px solid #dce5e2}.post-group summary{padding:.85rem .25rem;cursor:pointer;color:var(--accent);overflow-wrap:anywhere}.post-group summary::marker{color:#59827a}.post-group summary strong{margin-inline-start:.3rem}.post-group summary small{display:inline-block;margin-inline-start:.7rem;color:#566b69}.post-group[open] summary{margin-block-end:.25rem}
+.managed-posts{list-style:none;margin:0;padding:0 0 .65rem clamp(.35rem,2vw,1.5rem)}.managed-post{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.75rem 1.25rem;padding:1rem 0;border-top:1px solid #dce5e2;scroll-margin-block:1rem}.post-details{flex:1 1 17rem;min-width:0;overflow-wrap:anywhere}.post-title{font-size:1.08rem;line-height:1.4;margin:0 0 .25rem}.post-detail{margin:0;color:#566b69;font-size:.92rem}.managed-post .actions{gap:.5rem}.managed-post button{padding:.45rem .8rem}
 @media(max-width:38rem){main{padding-inline:.8rem}.bar{padding-inline:1rem}.brand{font-size:1.15rem}.actions{gap:.5rem}nav{gap:.6rem}.user select{max-width:12rem}}
+@media(max-width:32rem){.bar{flex-wrap:wrap}.post-search label{flex-basis:100%}}
 ` + avatarCss;
 function shell(title, content, session) {
-  const nav = (session?.canReadDiary ? '<a href="/diary/">日记</a>' : '') + (session?.isAdmin ? '<a href="/account/users">用户管理</a>' : '');
+  const nav = (session?.canReadDiary ? '<a href="/diary/">日记</a>' : '') + (session?.isAdmin ? '<a href="/account/posts">文章管理</a><a href="/account/users">用户管理</a>' : '');
   return '<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow,noarchive"><title>' + escape(title) + ' · ' + escape(config.title) + '</title><style>' + css + '</style></head><body class="field-paper"><header><div class="bar"><a class="brand" href="/">' + escape(config.title) + '</a><nav aria-label="主导航"><a href="/">首页</a>' + nav + '</nav></div></header><main>' + content + '</main></body></html>';
 }
 const message = (text, error = false) => text ? '<p role="status" class="' + (error ? 'error' : 'notice') + '">' + escape(text) + '</p>' : '';
@@ -49,7 +53,7 @@ export function home(session, info = '', error = false) {
   const role = session.isAdmin ? '管理员' : session.canReadDiary ? '日记读者' : '普通用户';
   return shell('我的账户','<section class="narrow"><h1>我的账户</h1>' + message(info,error) +
     '<div class="identity"><span class="profile-avatar">' + avatarMarkup(session.avatar) + '</span><div><p><strong>' + escape(session.name) + '</strong></p><p class="muted">' + role + '</p></div></div>' +
-    '<div class="actions">' + (session.canReadDiary ? '<a class="button" href="/diary/">阅读日记</a>' : '') + (session.isAdmin ? '<a class="button secondary" href="/account/users">用户管理</a>' : '') +
+    '<div class="actions">' + (session.canReadDiary ? '<a class="button" href="/diary/">阅读日记</a>' : '') + (session.isAdmin ? '<a class="button secondary" href="/account/posts">文章管理</a><a class="button secondary" href="/account/users">用户管理</a>' : '') +
     '<form method="post" action="/account/logout">' + token(session) + '<button class="secondary">退出登录</button></form></div></section>' +
     '<section class="narrow"><h2>我的头像</h2><form method="post" action="/account/avatar">' + token(session) + avatarPicker(session.avatar) + '<button>保存头像</button></form></section>' +
     '<section class="narrow"><h2>修改密码</h2><form method="post" action="/account/password">' + token(session) + '<label>当前密码<input name="current" type="password" required maxlength="256" autocomplete="current-password"></label><label>新密码（至少 12 个字符）<input name="password" type="password" required minlength="12" maxlength="256" autocomplete="new-password"></label><button>保存新密码</button></form></section>',session);
@@ -74,6 +78,49 @@ export function users(session, accounts, info = '', credential = null, error = f
 }
 export function confirmDelete(session, name) {
   return shell('删除用户','<section class="narrow"><h1>删除用户</h1><p>删除 ' + escape(name) + ' 后，该账号会立即失去访问权限。</p><form method="post" action="/account/users" class="actions">' + token(session) + field('action','delete') + field('username',name) + '<button class="danger">确认删除</button><a href="/account/users">取消</a></form></section>',session);
+}
+const postOrder = new Intl.Collator('zh-CN', {numeric:true});
+export function posts(session, entries, query = '', status = 'ready', savedId = '') {
+  const term = query.trim().toLowerCase();
+  const groups = new Map();
+  let count = 0;
+  for (const post of entries) {
+    const category = post.category || '未分类';
+    if (term && !post.title.toLowerCase().includes(term) && !category.toLowerCase().includes(term)) continue;
+    if (!groups.has(category)) groups.set(category, []);
+    groups.get(category).push(post);
+    count++;
+  }
+  const search = '<form method="get" action="/account/posts" role="search" class="post-search">' +
+    '<label>查找文章<input type="search" name="q" maxlength="100" placeholder="文章标题或分类" value="' + escape(query) + '"></label>' +
+    '<div class="actions"><button>查找</button>' + (term ? '<a href="/account/posts">清除搜索</a>' : '') + '</div></form>';
+  function row(post) {
+    const title = escape(post.title);
+    const visibility = post.hidden ? '显示' : '隐藏';
+    const pin = post.pinned ? '取消置顶' : '置顶';
+    const status = [post.hidden ? '隐藏' : '显示', post.pinned && (post.hidden ? '恢复显示后置顶' : '已置顶')].filter(Boolean).join(' · ');
+    return '<li class="managed-post" id="post-' + escape(post.id) + '" tabindex="-1"><div class="post-details"><h3 class="post-title">' + title + '</h3><p class="post-detail">' + status + '</p></div>' +
+      '<form method="post" action="/account/posts" class="actions">' + token(session) + field('id',post.id) + field('q',query) +
+      '<button name="action" value="' + (post.hidden ? 'show' : 'hide') + '" class="secondary" aria-label="' + visibility + '《' + title + '》">' + visibility + '</button>' +
+      '<button name="action" value="' + (post.pinned ? 'unpin' : 'pin') + '" class="secondary" aria-label="' + pin + '《' + title + '》">' + pin + '</button></form></li>';
+  }
+  const sections = [...groups.keys()].sort(postOrder.compare).map(category => {
+    const articles = groups.get(category);
+    const open = term || articles.some(post => post.id === savedId);
+    const rows = articles.sort((a,b) => postOrder.compare(a.title,b.title)).map(row).join('');
+    return '<details class="post-group"' + (open ? ' open' : '') + '><summary><strong>' + escape(category) + '</strong><small>' +
+      articles.length + ' 篇</small></summary><ul class="managed-posts">' + rows + '</ul></details>';
+  }).join('');
+  const result = sections || '<p class="muted">' + (term ? '没有找到匹配的文章。请换个标题或分类关键词。' : '当前没有可管理的文章。') + '</p>';
+  const failed = status === 'failed';
+  const info = failed ? '上次构建失败，访客仍会看到上次成功发布的版本。请查看服务日志后重试。' :
+    status === 'building' ? '设置已保存，正在更新公开博客。刷新本页可查看进度。' : savedId ? '文章设置已生效。' : '';
+  const retry = failed ? '<form method="post" action="/account/posts">' + token(session) + field('q',query) +
+    '<button name="action" value="retry">重新构建</button></form>' : '';
+  return shell('文章管理', '<section><h1>文章管理</h1>' + message(info,failed) + retry +
+    '<p>隐藏文章会从公开博客移除，置顶文章会排在首页列表前面。</p><p class="muted">保存后服务会自动构建，完成后即可查看。</p>' +
+    search + '</section><section><h2>' + (term ? '搜索结果' : '全部文章') + '（' + count + '）</h2>' + result +
+    '</section><a href="/account/">返回我的账户</a>',session);
 }
 export function statusPage(title, detail, session) {
   return shell(title,'<section class="narrow"><h1>' + escape(title) + '</h1><p>' + escape(detail) + '</p><div class="actions"><a href="/account/">我的账户</a><a href="/">返回首页</a></div></section>',session);

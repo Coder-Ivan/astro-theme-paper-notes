@@ -5,6 +5,7 @@ const { post } = Astro.props;
 const category = post.notebookPath?.[0];
 ---
 <div class="meta">
+  <slot />
   {post.created && <time datetime={post.created}>{dateLabel(post.created)}</time>}
   {category && <a class="book-link" href={'/categories/#' + notebookAnchor([category])}>{category}</a>}
   {post.tags?.map(tag => <a href={'/tags/#' + encodeURIComponent(tag)}>#{tag}</a>)}
