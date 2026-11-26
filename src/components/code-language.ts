@@ -83,6 +83,63 @@ function createLineToggle(gutter: HTMLElement, storageKey: string, blockNumber: 
   return label;
 }
 
+const previewLineCount = 15;
+
+function markFoldTail(code: HTMLElement) {
+  // The original highlighter markup can already include the split when restored.
+  if (code.lastElementChild?.classList.contains('code-fold-tail')) return;
+  const walker = document.createTreeWalker(code, NodeFilter.SHOW_TEXT);
+  let linesRemaining = previewLineCount;
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    const text = node.nodeValue || '';
+    let newline = text.indexOf('\n');
+    while (newline >= 0) {
+      if (--linesRemaining === 0) {
+        // A split inside a multiline syntax token keeps its styling on both sides.
+        const range = document.createRange();
+        range.selectNodeContents(code);
+        range.setStart(node, newline + 1);
+        const tail = document.createElement('span');
+        tail.className = 'code-fold-tail';
+        tail.append(range.extractContents());
+        code.append(tail);
+        return;
+      }
+      newline = text.indexOf('\n', newline + 1);
+    }
+  }
+}
+
+function enableFolding(block: HTMLElement, code: HTMLElement, gutter: HTMLElement) {
+  const numbers = gutter.dataset.lines?.split('\n') || [];
+  const lineCount = numbers.length;
+  if (lineCount <= previewLineCount) return false;
+  gutter.dataset.previewLines = numbers.slice(0, previewLineCount).join('\n');
+  code.id = 'code-content-' + block.dataset.codeBlock;
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'code-fold-toggle';
+  button.setAttribute('aria-controls', code.id);
+  function setCollapsed(collapsed: boolean) {
+    block.toggleAttribute('data-code-collapsed', collapsed);
+    button.setAttribute('aria-expanded', String(!collapsed));
+    button.textContent = collapsed
+      ? '展开剩余 ' + (lineCount - previewLineCount) + ' 行'
+      : '收起至前 ' + previewLineCount + ' 行';
+  }
+  button.addEventListener('click', () => {
+    const collapse = !block.hasAttribute('data-code-collapsed');
+    setCollapsed(collapse);
+    if (collapse && button.getBoundingClientRect().bottom < 0) {
+      block.scrollIntoView({ block: 'start' });
+    }
+  });
+  markFoldTail(code);
+  setCollapsed(true);
+  block.append(button);
+  return true;
+}
+
 function enableLanguagePicker(block: HTMLElement, code: HTMLElement, articleKey: string, index: number) {
   const initialLanguage = block.dataset.language || 'plaintext';
   const initialLabel = codeLanguages.find(language => language.id === initialLanguage)?.label || '纯文本';
@@ -114,6 +171,7 @@ function enableLanguagePicker(block: HTMLElement, code: HTMLElement, articleKey:
     const lineKey = 'paper-notes:code-lines:' + articleKey + ':' + block.dataset.codeBlock;
     toolbar.append(createLineToggle(gutter, lineKey, index + 1));
   }
+  const foldable = gutter && enableFolding(block, code, gutter);
   toolbar.append(controls);
   addCopyButton(controls,toolbar,code);
   block.prepend(toolbar);
@@ -142,6 +200,7 @@ function enableLanguagePicker(block: HTMLElement, code: HTMLElement, articleKey:
       }
       // The engine escapes source text and emits only syntax-token spans.
       code.innerHTML = html;
+      if (foldable) markFoldTail(code);
       code.classList.remove('language-' + (block.dataset.language || 'plaintext'));
       code.classList.add('language-' + language);
       block.dataset.language = language;
