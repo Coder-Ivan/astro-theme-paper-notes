@@ -1,9 +1,8 @@
 ---
 import { dateLabel, notebookAnchor, type JournalPost } from '../lib/journal.ts';
-interface Props { post: JournalPost; fullNotebookPath?: boolean }
-const { post, fullNotebookPath = false } = Astro.props;
-const notebookPath = post.notebookPath ?? [];
-const path = fullNotebookPath ? notebookPath : notebookPath.slice(0, 1);
+interface Props { post: JournalPost }
+const { post } = Astro.props;
+const path = post.notebookPath ?? [];
 ---
 <div class="meta">
   <slot />

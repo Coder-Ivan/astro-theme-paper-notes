@@ -19,7 +19,7 @@ const heading = page === 1 ? theme.title : '文章列表';
       {articles.map((post, i) => <article class:list={['panel', 'post-card', { illustrated: !!post.cover, reverse: i % 2 === 1 }]}>
         {post.cover && <a class="post-image" tabindex="-1" aria-hidden="true" href={postUrl(post)}><img src={post.cover.src} alt="" loading="lazy" decoding="async" /></a>}
         <div class="post-copy">
-          <PostMeta post={post} fullNotebookPath>{post.pinned && <strong>置顶</strong>}</PostMeta>
+          <PostMeta post={post}>{post.pinned && <strong>置顶</strong>}</PostMeta>
           <h3><a href={postUrl(post)}>{post.title}</a></h3>
           {post.excerpt && <p class="excerpt">{post.excerpt.slice(0, 210)}</p>}
         </div>

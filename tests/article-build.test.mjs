@@ -113,10 +113,13 @@ test('hidden articles leave the public build and pinned articles move ahead of p
   ]) {
     const card = querySelectorAll(parse(html), '.post-card').find(card => querySelector(card, `h3 a[href="/posts/${slug}/"]`));
     assert.ok(card, slug);
-    const links = querySelectorAll(card, '.notebook-path a');
-    assert.deepEqual(links.map(codeText), path);
-    assert.deepEqual(links.map(link => link.attributes.href),
-      path.map((_, i) => '/categories/#' + categoryNode(...path.slice(0, i + 1)).attributes.id));
+    const detail = parse(await contents('dist', `posts/${slug}/index.html`));
+    for (const meta of [querySelector(card, '.meta'), querySelector(detail, '.hero-copy .meta')]) {
+      const links = querySelectorAll(meta, '.notebook-path a');
+      assert.deepEqual(links.map(codeText), path);
+      assert.deepEqual(links.map(link => link.attributes.href),
+        path.map((_, i) => '/categories/#' + categoryNode(...path.slice(0, i + 1)).attributes.id));
+    }
   }
   assert.match(home,/href="\/posts\/early\/"/);
   assert.ok(home.indexOf('/posts/early/') < home.indexOf('/posts/entry-10/'));
