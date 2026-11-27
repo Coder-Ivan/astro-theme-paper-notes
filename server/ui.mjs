@@ -22,12 +22,13 @@ button.secondary,.button.secondary{color:#255850;background:#f7faf8;border-color
 .credential code{font:1rem/1.5 ui-monospace,monospace;overflow-wrap:anywhere;user-select:all}.credential p:last-child{margin:0}.muted{color:#566b69}.list{display:grid;gap:.9rem}.user{border-top:1px solid #dce5e2;padding-top:1rem}.user form{display:flex;align-items:end;gap:.5rem;flex-wrap:wrap}.user label{margin:0}.user-name{font-weight:700;margin-bottom:.35rem;overflow-wrap:anywhere}
 .identity{display:flex;align-items:center;gap:.8rem;margin-bottom:1.15rem}.identity p{margin:0;overflow-wrap:anywhere}.form-foot{margin-top:1.25rem}.user .identity{margin-bottom:.65rem}
 .post-search{display:flex;align-items:end;flex-wrap:wrap;gap:.65rem}.post-search label{flex:1 1 16rem;min-width:0;margin:0}.post-search .actions{min-height:2.75rem}
-.post-group{border-block-start:1px solid #dce5e2}.post-group summary{padding:.85rem .25rem;cursor:pointer;color:var(--accent);overflow-wrap:anywhere}.post-group summary::marker{color:#59827a}.post-group summary strong{margin-inline-start:.3rem}.post-group summary small{display:inline-block;margin-inline-start:.7rem;color:#566b69}.post-group[open] summary{margin-block-end:.25rem}
+.post-group{border-block-start:1px solid #dce5e2}.post-group>summary{padding:.85rem .25rem;cursor:pointer;color:var(--accent);overflow-wrap:anywhere}.post-group>summary::marker{color:#59827a}.post-group>summary strong{margin-inline-start:.3rem}.post-group>summary small{display:inline-block;margin-inline-start:.7rem;color:#566b69}.post-group[open]>summary{margin-block-end:.25rem}
+.notebook-children{border-inline-start:1px solid #d4e1dc;margin-inline-start:1rem;padding-inline-start:.65rem}.notebook-children.deep{margin-inline-start:0;padding-inline-start:0;border:0}
 .managed-posts{list-style:none;margin:0;padding:0 0 .65rem clamp(.35rem,2vw,1.5rem)}.managed-post{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.75rem 1.25rem;padding:1rem 0;border-top:1px solid #dce5e2;scroll-margin-block:1rem}.post-details{flex:1 1 17rem;min-width:0;overflow-wrap:anywhere}.post-title{font-size:1.08rem;line-height:1.4;margin:0 0 .25rem}.post-detail{margin:0;color:#566b69;font-size:.92rem}.managed-post .actions{gap:.5rem}.managed-post button{padding:.45rem .8rem}
 .bulk-posts{margin:0 0 1rem;padding:.8rem 1rem;border:1px solid #d1dfda;border-radius:.55rem;background:#f3f7f5}.bulk-heading,.bulk-actions{display:flex;align-items:center;flex-wrap:wrap;gap:.45rem .7rem}.bulk-heading output,.bulk-scope{font-size:.9rem;color:#466663}.bulk-heading .bulk-clear{margin-inline-start:auto}.bulk-actions{margin-top:.65rem}.bulk-posts button{font-size:.94rem;padding:.37rem .7rem}.bulk-posts button:disabled{color:#677774;background:#f3f5f4;border-color:#ced7d3;cursor:default;filter:none}.bulk-posts .bulk-scope{margin:.25rem 0 0}.bulk-heading [hidden],.category-choice[hidden]{display:none}
-.post-choice-group{position:relative}.post-choice-group.has-group-toggle summary{padding-inline-start:2.9rem}.category-choice{position:absolute;top:.13rem;inset-inline-start:0;display:grid;place-items:center;width:2.6rem;height:2.6rem;margin:0;cursor:pointer}.category-choice input,.post-choice input{width:1.15rem;height:1.15rem;margin:0;accent-color:var(--accent);cursor:pointer}.post-choice{display:flex;align-items:flex-start;gap:.65rem;margin:0;min-height:1.6rem;cursor:pointer;font-weight:inherit}.post-choice input{flex:none;margin-top:.16rem}.post-choice span{min-width:0}.managed-post .post-detail{margin-inline-start:1.8rem}
+.post-choice-group{position:relative;min-width:0}.post-choice-group.has-group-toggle>.post-group>summary{padding-inline-start:2.9rem}.category-choice{position:absolute;top:.13rem;inset-inline-start:0;display:grid;place-items:center;width:2.6rem;height:2.6rem;margin:0;cursor:pointer}.category-choice input,.post-choice input{width:1.15rem;height:1.15rem;margin:0;accent-color:var(--accent);cursor:pointer}.post-choice{display:flex;align-items:flex-start;gap:.65rem;margin:0;min-height:1.6rem;cursor:pointer;font-weight:inherit}.post-choice input{flex:none;margin-top:.16rem}.post-choice span{min-width:0}.managed-post .post-detail{margin-inline-start:1.8rem}
 @media(max-width:38rem){main{padding-inline:.8rem}.bar{padding-inline:1rem}.brand{font-size:1.15rem}.actions{gap:.5rem}nav{gap:.6rem}.user select{max-width:12rem}}
-@media(max-width:32rem){.bar{flex-wrap:wrap}.post-search label{flex-basis:100%}}
+@media(max-width:32rem){.bar{flex-wrap:wrap}.post-search label{flex-basis:100%}.notebook-children{margin-inline-start:.4rem;padding-inline-start:.35rem}}
 ` + avatarCss;
 function shell(title, content, session) {
   const nav = (session?.canReadDiary ? '<a href="/diary/">日记</a>' : '') + (session?.isAdmin ? '<a href="/account/posts">文章管理</a><a href="/account/users">用户管理</a>' : '');
@@ -84,8 +85,9 @@ export function confirmDelete(session, name) {
 function managePostSelection() {
   const form = document.getElementById('bulk-posts');
   if (!form) return;
+  const allRows = Array.from(document.querySelectorAll('input[form="bulk-posts"]'));
   const groups = Array.from(document.querySelectorAll('.post-choice-group'), group => ({
-    toggle: group.querySelector('.category-choice input'),
+    toggle: group.querySelector(':scope > .category-choice input'),
     rows: Array.from(group.querySelectorAll('input[form="bulk-posts"]')),
   }));
   const counter = form.querySelector('output');
@@ -93,13 +95,12 @@ function managePostSelection() {
   const actions = form.querySelectorAll('button[type="submit"]');
 
   function update() {
-    let total = 0;
     for (const {toggle,rows} of groups) {
       const count = rows.filter(row => row.checked).length;
       toggle.checked = count === rows.length;
       toggle.indeterminate = count > 0 && count < rows.length;
-      total += count;
     }
+    const total = allRows.filter(row => row.checked).length;
     counter.textContent = '已选 ' + total + ' 篇';
     clear.disabled = total === 0;
     actions.forEach(button => { button.disabled = total === 0; });
@@ -112,12 +113,12 @@ function managePostSelection() {
       rows.forEach(row => { row.checked = toggle.checked; });
       update();
     });
-    rows.forEach(row => row.addEventListener('change',update));
   }
+  allRows.forEach(row => row.addEventListener('change',update));
   clear.hidden = false;
   counter.hidden = false;
   clear.addEventListener('click', () => {
-    for (const {rows} of groups) rows.forEach(row => { row.checked = false; });
+    allRows.forEach(row => { row.checked = false; });
     update();
   });
   window.addEventListener('pageshow',update);
@@ -142,17 +143,29 @@ function bulkPostForm(session, query) {
 const postOrder = new Intl.Collator('zh-CN', {numeric:true});
 export function posts(session, entries, query = '', status = 'ready', savedId = '', bulkSaved = null) {
   const term = query.trim().toLowerCase();
-  const groups = new Map();
+  const pathTerm = term.replace(/\s*\/\s*/g,'/');
+  const notebooks = new Map();
   let count = 0;
   for (const post of entries) {
-    const category = post.category || '未分类';
-    if (term && !post.title.toLowerCase().includes(term) && !category.toLowerCase().includes(term)) continue;
-    if (!groups.has(category)) groups.set(category, []);
-    groups.get(category).push(post);
+    const path = Array.isArray(post.notebookPath) && post.notebookPath.length ? post.notebookPath : [post.category || '未分类'];
+    if (term && !post.title.toLowerCase().includes(term) && !path.join('/').toLowerCase().replace(/\s*\/\s*/g,'/').includes(pathTerm)) continue;
+    let siblings = notebooks;
+    let node;
+    for (const name of path) {
+      node = siblings.get(name);
+      if (!node) {
+        node = {name, children:new Map(), articles:[], count:0, open:false};
+        siblings.set(name,node);
+      }
+      node.count++;
+      if (term || post.id === savedId) node.open = true;
+      siblings = node.children;
+    }
+    node.articles.push(post);
     count++;
   }
   const search = '<form method="get" action="/account/posts" role="search" class="post-search">' +
-    '<label>查找文章<input type="search" name="q" maxlength="100" placeholder="文章标题或分类" value="' + escape(query) + '"></label>' +
+    '<label>查找文章<input type="search" name="q" maxlength="100" placeholder="文章标题或笔记本路径" value="' + escape(query) + '"></label>' +
     '<div class="actions"><button>查找</button>' + (term ? '<a href="/account/posts">清除搜索</a>' : '') + '</div></form>';
   function row(post) {
     const title = escape(post.title);
@@ -166,15 +179,19 @@ export function posts(session, entries, query = '', status = 'ready', savedId = 
       '<button name="action" value="' + (post.hidden ? 'show' : 'hide') + '" class="secondary" aria-label="' + visibility + '《' + title + '》">' + visibility + '</button>' +
       '<button name="action" value="' + (post.pinned ? 'unpin' : 'pin') + '" class="secondary" aria-label="' + pin + '《' + title + '》">' + pin + '</button></form></li>';
   }
-  const sections = [...groups.keys()].sort(postOrder.compare).map(category => {
-    const articles = groups.get(category);
-    const open = term || articles.some(post => post.id === savedId);
-    const rows = articles.sort((a,b) => postOrder.compare(a.title,b.title)).map(row).join('');
-    const selection = '选择「' + escape(category) + '」分类' + (term ? '中匹配的文章' : '的全部文章');
-    return '<div class="post-choice-group"><label class="category-choice" hidden title="' + selection + '">' +
-      '<input type="checkbox" aria-label="' + selection + '"></label><details class="post-group"' + (open ? ' open' : '') + '><summary><strong>' + escape(category) + '</strong><small>' +
-      articles.length + ' 篇</small></summary><ul class="managed-posts">' + rows + '</ul></details></div>';
-  }).join('');
+  function notebookSections(siblings, ancestors) {
+    return [...siblings.values()].sort((a,b) => postOrder.compare(a.name,b.name)).map(node => {
+      const path = [...ancestors,node.name];
+      const articles = node.articles.sort((a,b) => Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)) || postOrder.compare(a.title,b.title));
+      const rows = articles.length ? '<ul class="managed-posts">' + articles.map(row).join('') + '</ul>' : '';
+      const children = node.children.size ? '<div class="notebook-children' + (path.length >= 5 ? ' deep' : '') + '">' + notebookSections(node.children,path) + '</div>' : '';
+      const selection = '选择「' + escape(path.join(' / ')) + '」分类' + (term ? '中匹配的文章' : '的全部文章');
+      return '<div class="post-choice-group"><label class="category-choice" hidden title="' + selection + '">' +
+        '<input type="checkbox" aria-label="' + selection + '"></label><details class="post-group"' + (node.open ? ' open' : '') + '><summary><strong>' + escape(node.name) + '</strong><small>' +
+        node.count + ' 篇</small></summary>' + rows + children + '</details></div>';
+    }).join('');
+  }
+  const sections = notebookSections(notebooks,[]);
   const result = sections || '<p class="muted">' + (term ? '没有找到匹配的文章。请换个标题或分类关键词。' : '当前没有可管理的文章。') + '</p>';
   const failed = status === 'failed';
   const receipt = bulkSaved ? '已处理 ' + bulkSaved.selected + ' 篇，实际更改 ' + bulkSaved.changed + ' 篇。' : '';

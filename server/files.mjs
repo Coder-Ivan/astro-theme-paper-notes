@@ -69,6 +69,13 @@ export function buildReader(publicDir, privateDir) {
               (post.hidden ? Object.hasOwn(next.public,post.slug) : next.public[post.slug] !== post.id)) {
             throw new Error('Article catalog and discussion manifest differ.');
           }
+          // Older builds recorded only the root name. It can contain a literal slash.
+          const path = Object.hasOwn(post,'notebookPath') ? post.notebookPath : post.category ? [post.category] : [];
+          if (!Array.isArray(path) || !path.every(name => typeof name === 'string' && name.length > 0) ||
+              (path[0] ?? '') !== post.category || post.category.toLowerCase() === 'journal') {
+            throw new Error('Invalid article catalog notebook path.');
+          }
+          post.notebookPath = path;
           ids.add(post.id);
           slugs.add(post.slug);
         }

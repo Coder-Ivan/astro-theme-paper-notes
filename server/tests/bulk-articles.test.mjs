@@ -7,6 +7,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import test from 'node:test';
+import { parse } from 'ultrahtml';
+import { querySelector, querySelectorAll } from 'ultrahtml/selector';
 import { createBlogServer } from '../index.mjs';
 import { editAccounts, openStore } from '../storage.mjs';
 import { newAccount } from '../service.mjs';
@@ -17,6 +19,14 @@ test('bulk article forms validate the complete selection and commit one publicat
     id:index.toString(16).padStart(32,'0'), title:'Test '+index, slug:'test-'+index,
     category:index % 2 ? 'A' : 'B', hidden:false, pinned:index === 0,
   }));
+  articles[0].title = 'Z test';
+  articles[0].notebookPath = ['B','Notes'];
+  articles[1].notebookPath = ['A','Notes'];
+  articles[2].notebookPath = ['B','Notes'];
+  articles[3].category = 'B';
+  articles[3].notebookPath = ['B','Notes','Drafts'];
+  articles[9].title = 'Legacy root-only note';
+  articles[9].category = 'A / B';
   const release = {public:Object.fromEntries(articles.map(row => [row.slug,row.id])), diary:{}, articles};
   const store = openStore(folder,{threads:() => release});
   const first = articles[0].id, second = articles[1].id;
@@ -58,6 +68,22 @@ test('bulk article forms validate the complete selection and commit one publicat
   const member = await signIn('register',{username:'reader',password,avatar:'moon'});
   const path = '/account/posts';
   const page = await post(path,undefined,admin.cookie);
+  const names = groups => groups.map(group => querySelector(group,'summary strong').children[0].value);
+  const rowIds = container => querySelectorAll(container,'li.managed-post').map(row => row.attributes.id.slice('post-'.length));
+  const filterPage = async term => parse((await post(path + '?q=' + encodeURIComponent(term),undefined,admin.cookie)).body);
+  const tree = parse(page.body);
+  assert.equal(querySelectorAll(tree,'details[open]').length,0);
+  assert.equal(new Set(rowIds(tree)).size,articles.length);
+  assert.equal(rowIds(tree).length,articles.length);
+  const selected = await filterPage('B / Notes');
+  assert.deepEqual(names(querySelectorAll(selected,'details[open]')),['B','Notes','Drafts']);
+  assert.deepEqual(rowIds(selected),[first,articles[2].id,articles[3].id]);
+  assert.deepEqual(rowIds(await filterPage('A/Notes')),[second]);
+  const legacy = await filterPage(articles[9].title);
+  assert.deepEqual(names(querySelectorAll(legacy,'details')),['A / B']);
+  assert.deepEqual(rowIds(legacy),[articles[9].id]);
+  const located = parse((await post(path + '?post=' + articles[3].id,undefined,admin.cookie)).body);
+  assert.deepEqual(names(querySelectorAll(located,'details[open]')),['B','Notes','Drafts']);
   const script = page.body.match(/<script>([\s\S]+?)<\/script>/)[1];
   const scriptSource = "'sha256-" + createHash('sha256').update(script).digest('base64') + "'";
   assert.ok(page.headers['content-security-policy'].includes('script-src ' + scriptSource));
@@ -117,4 +143,5 @@ test('bulk article forms validate the complete selection and commit one publicat
   assert.deepEqual(restored[first],{hidden:false,pinned:false});
   assert.deepEqual(restored[second],{hidden:false,pinned:false});
   assert.deepEqual(restored[all.at(-1)],{hidden:true});
+  assert.deepEqual(rowIds(await filterPage('B / Notes')),[articles[2].id,first,articles[3].id]);
 });

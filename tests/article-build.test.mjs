@@ -10,6 +10,7 @@ import { querySelector, querySelectorAll } from 'ultrahtml/selector';
 import { decodeString } from 'micromark-util-decode-string';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
+import { buildReader } from '../server/files.mjs';
 import { openStore } from '../server/storage.mjs';
 
 const exec = promisify(execFile);
@@ -144,11 +145,24 @@ test('hidden articles leave the public build and pinned articles move ahead of p
   assertCodeExamples(await contents('dist-private','diary/posts/diary-sample/index.html'),diarySearch[0].text);
   const privateIndex = JSON.parse(await contents('dist-private','threads.json'));
   const hidden = privateIndex.articles.find(note=>note.id===secretId);
-  assert.deepEqual(hidden,{id:secretId,slug:'hidden-sample',title:'Secret title',category:'Notebook',hidden:true,pinned:false});
+  assert.deepEqual(hidden,{id:secretId,slug:'hidden-sample',title:'Secret title',category:'Notebook',notebookPath:['Notebook'],hidden:true,pinned:false});
+  assert.deepEqual(privateIndex.articles.find(note=>note.slug==='entry-01').notebookPath,['Field','Plants','Buds']);
   assert.ok(privateIndex.articles.find(note=>note.slug==='early').pinned);
   assert.ok(!privateIndex.articles.some(note=>note.slug==='diary-sample'));
   assert.ok(!Object.hasOwn(privateIndex.public,'hidden-sample'));
   assert.ok(Object.hasOwn(privateIndex.diary,'diary-sample'));
+  const manifest = join(site,'dist-private','threads.json');
+  const reader = buildReader(join(site,'dist'),join(site,'dist-private'));
+  const writeCatalog = articles => writeFile(manifest, JSON.stringify({...privateIndex,articles}));
+  const visible = privateIndex.articles.filter(note => note.id !== secretId);
+  const {notebookPath, ...legacy} = hidden;
+  await writeCatalog([...visible,{...legacy,category:'Root / literal slash'}]);
+  assert.deepEqual(reader.threads().articles.at(-1).notebookPath,['Root / literal slash']);
+  for (const path of [null,['Wrong root'],['Notebook',42],['Notebook','']]) {
+    await writeCatalog([...visible,{...hidden,notebookPath:path}]);
+    assert.throws(() => reader.threads(), /notebook path/i);
+  }
+  await writeCatalog(privateIndex.articles);
 
   const store = openStore(options.env.PAPER_NOTES_DATA_DIR);
   try {

@@ -97,7 +97,13 @@ test('a site owner controls grouped articles through the live server and automat
   const initial = await admin();
   assert.match(initial,/<details class="post-group"><summary><strong>未分类<\/strong>/);
   assert.match(initial,/<details class="post-group"><summary><strong>Field<\/strong>/);
-  assert.doesNotMatch(initial,/<strong>Nested<\/strong>/);
+  assert.match(initial,/<details class="post-group"><summary><strong>Nested<\/strong>/);
+  const nested = await admin('?q=' + encodeURIComponent('Field / Nested'));
+  for (const name of ['Field','Nested']) {
+    assert.ok(nested.includes('<details class="post-group" open><summary><strong>' + name + '</strong>'));
+  }
+  assert.ok(nested.includes('id="post-' + laterId + '"'));
+  assert.ok(!nested.includes('id="post-' + id + '"'));
   const matching = await admin('?q=Early');
   assert.match(matching,/<details class="post-group" open><summary><strong>未分类<\/strong>/);
   assert.doesNotMatch(matching,/<strong>Field<\/strong>/);

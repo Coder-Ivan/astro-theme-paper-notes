@@ -150,6 +150,7 @@ const notes: ExportedPost[] = source.map((note: ExportedPost) => isDiary(note)
   : { ...note, ...overrides[note.id] });
 export const articleCatalog = notes.filter(note => !isDiary(note)).map(note => ({
   id: note.id, slug: note.slug, title: note.title, category: note.notebookPath?.[0] ?? '',
+  notebookPath: note.notebookPath ?? [],
   hidden: note.hidden ?? false, pinned: note.pinned ?? false,
 }));
 const notesById = new Map(notes.map(note => [note.id, note]));
