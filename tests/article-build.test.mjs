@@ -75,7 +75,7 @@ test('hidden articles leave the public build and pinned articles move ahead of p
   await writeFile(join(category,'early.md'),'---\ntitle: Early observation\nslug: early\ndate: 2001-01-01\npinned: true\n---\nEarly observation body.\n\n' + codeExamples);
   for (let i=1; i<=10; i++) {
     const day = String(i).padStart(2,'0');
-    await writeFile(join(i === 1 ? nested : category,'entry-'+day+'.md'),'---\ntitle: Entry '+day+'\nslug: entry-'+day+'\ndate: 2024-05-'+day+'\n---\n' +
+    await writeFile(join(i === 1 || i === 10 ? nested : category,'entry-'+day+'.md'),'---\ntitle: Entry '+day+'\nslug: entry-'+day+'\ndate: 2024-05-'+day+'\n---\n' +
       '[Secret label](/posts/hidden-sample/) and [another private label](/posts/%68idden-sample/index.html?test=1#part).');
   }
   const imported = join(site,'export');
@@ -105,10 +105,23 @@ test('hidden articles leave the public build and pinned articles move ahead of p
   assert.ok(querySelector(categoryNode('Field','Plants','Buds'), nestedPost));
   assert.equal(querySelectorAll(categories, nestedPost).length, 1);
   const home = await contents('dist','index.html');
+  const secondPage = await contents('dist','page/2/index.html');
+  for (const [html, slug, path] of [
+    [home, 'early', ['Field']],
+    [home, 'entry-10', ['Field', 'Plants', 'Buds']],
+    [secondPage, 'entry-01', ['Field', 'Plants', 'Buds']],
+  ]) {
+    const card = querySelectorAll(parse(html), '.post-card').find(card => querySelector(card, `h3 a[href="/posts/${slug}/"]`));
+    assert.ok(card, slug);
+    const links = querySelectorAll(card, '.notebook-path a');
+    assert.deepEqual(links.map(codeText), path);
+    assert.deepEqual(links.map(link => link.attributes.href),
+      path.map((_, i) => '/categories/#' + categoryNode(...path.slice(0, i + 1)).attributes.id));
+  }
   assert.match(home,/href="\/posts\/early\/"/);
   assert.ok(home.indexOf('/posts/early/') < home.indexOf('/posts/entry-10/'));
   assert.match(home,/<strong>置顶<\/strong>/);
-  assert.doesNotMatch(await contents('dist','page/2/index.html'),/href="\/posts\/early\/"/);
+  assert.doesNotMatch(secondPage,/href="\/posts\/early\/"/);
   const archive = await contents('dist','archives/index.html');
   assert.match(archive,/href="\/posts\/entry-10\/"/);
   assert.ok(archive.indexOf('/posts/entry-10/') < archive.indexOf('/posts/early/'));

@@ -1,12 +1,16 @@
 ---
 import { dateLabel, notebookAnchor, type JournalPost } from '../lib/journal.ts';
-interface Props { post: JournalPost }
-const { post } = Astro.props;
-const category = post.notebookPath?.[0];
+interface Props { post: JournalPost; fullNotebookPath?: boolean }
+const { post, fullNotebookPath = false } = Astro.props;
+const notebookPath = post.notebookPath ?? [];
+const path = fullNotebookPath ? notebookPath : notebookPath.slice(0, 1);
 ---
 <div class="meta">
   <slot />
   {post.created && <time datetime={post.created}>{dateLabel(post.created)}</time>}
-  {category && <a class="book-link" href={'/categories/#' + notebookAnchor([category])}>{category}</a>}
+  {path[0] && <span class="notebook-path">{path.map((name, index) => <>
+    {index > 0 && <span aria-hidden="true"> › </span>}
+    <a href={'/categories/#' + notebookAnchor(path.slice(0, index + 1))}>{name}</a>
+  </>)}</span>}
   {post.tags?.map(tag => <a href={'/tags/#' + encodeURIComponent(tag)}>#{tag}</a>)}
 </div>
