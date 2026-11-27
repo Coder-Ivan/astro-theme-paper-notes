@@ -182,12 +182,13 @@ export function posts(session, entries, query = '', status = 'ready', savedId = 
   function notebookSections(siblings, ancestors) {
     return [...siblings.values()].sort((a,b) => postOrder.compare(a.name,b.name)).map(node => {
       const path = [...ancestors,node.name];
+      const open = path.length === 1 || node.open;
       const articles = node.articles.sort((a,b) => Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)) || postOrder.compare(a.title,b.title));
       const rows = articles.length ? '<ul class="managed-posts">' + articles.map(row).join('') + '</ul>' : '';
       const children = node.children.size ? '<div class="notebook-children' + (path.length >= 5 ? ' deep' : '') + '">' + notebookSections(node.children,path) + '</div>' : '';
       const selection = '选择「' + escape(path.join(' / ')) + '」分类' + (term ? '中匹配的文章' : '的全部文章');
       return '<div class="post-choice-group"><label class="category-choice" hidden title="' + selection + '">' +
-        '<input type="checkbox" aria-label="' + selection + '"></label><details class="post-group"' + (node.open ? ' open' : '') + '><summary><strong>' + escape(node.name) + '</strong><small>' +
+        '<input type="checkbox" aria-label="' + selection + '"></label><details class="post-group"' + (open ? ' open' : '') + '><summary><strong>' + escape(node.name) + '</strong><small>' +
         node.count + ' 篇</small></summary>' + rows + children + '</details></div>';
     }).join('');
   }

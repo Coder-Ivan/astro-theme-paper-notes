@@ -72,7 +72,7 @@ test('bulk article forms validate the complete selection and commit one publicat
   const rowIds = container => querySelectorAll(container,'li.managed-post').map(row => row.attributes.id.slice('post-'.length));
   const filterPage = async term => parse((await post(path + '?q=' + encodeURIComponent(term),undefined,admin.cookie)).body);
   const tree = parse(page.body);
-  assert.equal(querySelectorAll(tree,'details[open]').length,0);
+  assert.deepEqual(names(querySelectorAll(tree,'details[open]')),['A','A / B','B']);
   assert.equal(new Set(rowIds(tree)).size,articles.length);
   assert.equal(rowIds(tree).length,articles.length);
   const selected = await filterPage('B / Notes');
@@ -83,7 +83,7 @@ test('bulk article forms validate the complete selection and commit one publicat
   assert.deepEqual(names(querySelectorAll(legacy,'details')),['A / B']);
   assert.deepEqual(rowIds(legacy),[articles[9].id]);
   const located = parse((await post(path + '?post=' + articles[3].id,undefined,admin.cookie)).body);
-  assert.deepEqual(names(querySelectorAll(located,'details[open]')),['B','Notes','Drafts']);
+  assert.deepEqual(names(querySelectorAll(located,'details[open]')),['A','A / B','B','Notes','Drafts']);
   const script = page.body.match(/<script>([\s\S]+?)<\/script>/)[1];
   const scriptSource = "'sha256-" + createHash('sha256').update(script).digest('base64') + "'";
   assert.ok(page.headers['content-security-policy'].includes('script-src ' + scriptSource));

@@ -95,8 +95,8 @@ test('a site owner controls grouped articles through the live server and automat
   assert.equal((await request(path,owner,{action:'hide',id,csrf:''})).status,403);
   const admin = async (query='') => (await request(path+query,owner)).text();
   const initial = await admin();
-  assert.match(initial,/<details class="post-group"><summary><strong>未分类<\/strong>/);
-  assert.match(initial,/<details class="post-group"><summary><strong>Field<\/strong>/);
+  assert.match(initial,/<details class="post-group" open><summary><strong>未分类<\/strong>/);
+  assert.match(initial,/<details class="post-group" open><summary><strong>Field<\/strong>/);
   assert.match(initial,/<details class="post-group"><summary><strong>Nested<\/strong>/);
   const nested = await admin('?q=' + encodeURIComponent('Field / Nested'));
   for (const name of ['Field','Nested']) {
