@@ -13,13 +13,38 @@ const articleCount = notebookTree.reduce((sum, root) => sum + root.count, 0);
   <main class="frame columns" id="main">
     <div class="panel notebook-browser" data-diary-enabled={theme.services ? '' : undefined}>
       {notebookTree.length > 0
-        ? <ul class="notebook-tree" aria-label="笔记本分类">{notebookTree.map(node => <NotebookNode node={node} />)}</ul>
+        ? <>
+            <div class="notebook-controls" role="group" aria-label="目录展开方式" hidden>
+              <button type="button" data-notebook-action="expand" aria-controls="notebook-tree">全部展开</button>
+              <button type="button" data-notebook-action="collapse" aria-controls="notebook-tree">全部折叠</button>
+              <button type="button" data-notebook-action="reset" aria-controls="notebook-tree">恢复默认</button>
+            </div>
+            <ul class="notebook-tree" id="notebook-tree" aria-label="笔记本分类">{notebookTree.map(node => <NotebookNode node={node} />)}</ul>
+          </>
         : <p>暂无笔记本分类。</p>}
     </div>
     <Sidebar />
   </main>
   <script>
+    let overriddenHash: string | null = null;
+    const tree = document.getElementById('notebook-tree');
+    const controls = document.querySelector<HTMLElement>('.notebook-controls');
+    if (tree && controls) {
+      const branches = tree.querySelectorAll<HTMLDetailsElement>('details.notebook-node');
+      controls.addEventListener('click', event => {
+        const button = event.target instanceof Element && event.target.closest<HTMLButtonElement>('button[data-notebook-action]');
+        if (!button) return;
+        overriddenHash = location.hash;
+        const action = button.dataset.notebookAction;
+        for (const branch of branches) {
+          branch.open = action === 'expand' || (action === 'reset' && branch.matches('.notebook-tree > li > details'));
+        }
+      });
+      controls.hidden = false;
+    }
+
     function followNotebookHash() {
+      overriddenHash = null;
       const match = /^#book-([\w-]+)$/.exec(location.hash);
       if (!match) return;
       const target = document.getElementById(location.hash.slice(1));
@@ -48,7 +73,9 @@ const articleCount = notebookTree.reduce((sum, root) => sum + root.count, 0);
     }
     followNotebookHash();
     window.addEventListener('hashchange', followNotebookHash);
-    window.addEventListener('pageshow', event => { if (event.persisted) followNotebookHash(); });
+    window.addEventListener('pageshow', event => {
+      if (event.persisted && location.hash !== overriddenHash) followNotebookHash();
+    });
     // A reader can close the current target and follow the same sidebar link again.
     document.addEventListener('click', event => {
       if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;

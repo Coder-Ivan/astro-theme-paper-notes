@@ -72,9 +72,13 @@ test('bulk article forms validate the complete selection and commit one publicat
   const rowIds = container => querySelectorAll(container,'li.managed-post').map(row => row.attributes.id.slice('post-'.length));
   const filterPage = async term => parse((await post(path + '?q=' + encodeURIComponent(term),undefined,admin.cookie)).body);
   const tree = parse(page.body);
+  const commands = querySelectorAll(tree,'.notebook-actions[hidden] button[type="button"][aria-controls="managed-notebooks"]');
+  assert.deepEqual(commands.map(button => button.children[0].value),['全部展开','全部折叠','恢复默认']);
+  assert.ok(querySelector(tree,'#managed-notebooks details'));
   assert.deepEqual(names(querySelectorAll(tree,'details[open]')),['A','A / B','B']);
   assert.equal(new Set(rowIds(tree)).size,articles.length);
   assert.equal(rowIds(tree).length,articles.length);
+  assert.equal(querySelectorAll(await filterPage('absent'),'.notebook-actions').length,0);
   const selected = await filterPage('B / Notes');
   assert.deepEqual(names(querySelectorAll(selected,'details[open]')),['B','Notes','Drafts']);
   assert.deepEqual(rowIds(selected),[first,articles[2].id,articles[3].id]);

@@ -95,6 +95,11 @@ test('hidden articles leave the public build and pinned articles move ahead of p
   const search = JSON.parse(await contents('dist','assets/search.json'));
   assertCodeExamples(await contents('dist','posts/early/index.html'), search.find(post => post.url === '/posts/early/').text);
   const categories = parse(await contents('dist','categories/index.html'));
+  const controls = querySelector(categories, '.notebook-controls[hidden]');
+  assert.ok(controls);
+  assert.deepEqual(querySelectorAll(controls, 'button[type="button"][aria-controls="notebook-tree"]').map(codeText),
+    ['全部展开', '全部折叠', '恢复默认']);
+  assert.ok(querySelector(categories, 'ul#notebook-tree'));
   const categoryNode = (...path) => querySelector(categories,
     'details#book-' + Buffer.from(JSON.stringify(path)).toString('base64url'));
   for (const path of [['Field'], ['Notebook'], ['Field','Plants'], ['Field','Plants','Buds']]) {

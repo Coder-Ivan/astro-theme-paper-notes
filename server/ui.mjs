@@ -22,6 +22,7 @@ button.secondary,.button.secondary{color:#255850;background:#f7faf8;border-color
 .credential code{font:1rem/1.5 ui-monospace,monospace;overflow-wrap:anywhere;user-select:all}.credential p:last-child{margin:0}.muted{color:#566b69}.list{display:grid;gap:.9rem}.user{border-top:1px solid #dce5e2;padding-top:1rem}.user form{display:flex;align-items:end;gap:.5rem;flex-wrap:wrap}.user label{margin:0}.user-name{font-weight:700;margin-bottom:.35rem;overflow-wrap:anywhere}
 .identity{display:flex;align-items:center;gap:.8rem;margin-bottom:1.15rem}.identity p{margin:0;overflow-wrap:anywhere}.form-foot{margin-top:1.25rem}.user .identity{margin-bottom:.65rem}
 .post-search{display:flex;align-items:end;flex-wrap:wrap;gap:.65rem}.post-search label{flex:1 1 16rem;min-width:0;margin:0}.post-search .actions{min-height:2.75rem}
+.notebook-actions{gap:.45rem;margin-bottom:.75rem}.notebook-actions[hidden]{display:none}.notebook-actions button{font-size:.94rem;padding:.37rem .7rem}
 .post-group{border-block-start:1px solid #dce5e2}.post-group>summary{padding:.85rem .25rem;cursor:pointer;color:var(--accent);overflow-wrap:anywhere}.post-group>summary::marker{color:#59827a}.post-group>summary strong{margin-inline-start:.3rem}.post-group>summary small{display:inline-block;margin-inline-start:.7rem;color:#566b69}.post-group[open]>summary{margin-block-end:.25rem}
 .notebook-children{border-inline-start:1px solid #d4e1dc;margin-inline-start:1rem;padding-inline-start:.65rem}.notebook-children.deep{margin-inline-start:0;padding-inline-start:0;border:0}
 .managed-posts{list-style:none;margin:0;padding:0 0 .65rem clamp(.35rem,2vw,1.5rem)}.managed-post{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.75rem 1.25rem;padding:1rem 0;border-top:1px solid #dce5e2;scroll-margin-block:1rem}.post-details{flex:1 1 17rem;min-width:0;overflow-wrap:anywhere}.post-title{font-size:1.08rem;line-height:1.4;margin:0 0 .25rem}.post-detail{margin:0;color:#566b69;font-size:.92rem}.managed-post .actions{gap:.5rem}.managed-post button{padding:.45rem .8rem}
@@ -84,9 +85,21 @@ export function confirmDelete(session, name) {
 }
 function managePostSelection() {
   const form = document.getElementById('bulk-posts');
-  if (!form) return;
-  const allRows = Array.from(document.querySelectorAll('input[form="bulk-posts"]'));
-  const groups = Array.from(document.querySelectorAll('.post-choice-group'), group => ({
+  const tree = document.getElementById('managed-notebooks');
+  if (!form || !tree) return;
+  const toolbar = document.querySelector('.notebook-actions');
+  const branches = tree.querySelectorAll('details.post-group');
+  for (const button of toolbar.querySelectorAll('button')) {
+    button.addEventListener('click', () => {
+      for (const branch of branches) {
+        const isRoot = !branch.parentElement.closest('details.post-group');
+        branch.open = button.value === 'expand' || (button.value === 'default' && isRoot);
+      }
+    });
+  }
+  toolbar.hidden = false;
+  const allRows = Array.from(tree.querySelectorAll('input[form="bulk-posts"]'));
+  const groups = Array.from(tree.querySelectorAll('.post-choice-group'), group => ({
     toggle: group.querySelector(':scope > .category-choice input'),
     rows: Array.from(group.querySelectorAll('input[form="bulk-posts"]')),
   }));
@@ -193,7 +206,11 @@ export function posts(session, entries, query = '', status = 'ready', savedId = 
     }).join('');
   }
   const sections = notebookSections(notebooks,[]);
-  const result = sections || '<p class="muted">' + (term ? '没有找到匹配的文章。请换个标题或分类关键词。' : '当前没有可管理的文章。') + '</p>';
+  const toolbar = '<div class="actions notebook-actions" role="group" aria-label="目录展开与折叠" hidden>' +
+    '<button type="button" class="secondary" value="expand" aria-controls="managed-notebooks">全部展开</button>' +
+    '<button type="button" class="secondary" value="collapse" aria-controls="managed-notebooks">全部折叠</button>' +
+    '<button type="button" class="secondary" value="default" aria-controls="managed-notebooks">恢复默认</button></div>';
+  const result = sections ? toolbar + '<div id="managed-notebooks">' + sections + '</div>' : '<p class="muted">' + (term ? '没有找到匹配的文章。请换个标题或分类关键词。' : '当前没有可管理的文章。') + '</p>';
   const failed = status === 'failed';
   const receipt = bulkSaved ? '已处理 ' + bulkSaved.selected + ' 篇，实际更改 ' + bulkSaved.changed + ' 篇。' : '';
   const info = failed ? '上次构建失败，访客仍会看到上次成功发布的版本。请查看服务日志后重试。' :

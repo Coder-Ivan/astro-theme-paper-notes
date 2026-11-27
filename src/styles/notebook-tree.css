@@ -1,4 +1,25 @@
 .notebook-browser { padding: clamp(.8rem, 2vw, 1.6rem); }
+.notebook-controls:not([hidden]) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .4rem;
+  padding: 0 0 .7rem;
+  margin-bottom: .4rem;
+  border-bottom: 1px solid var(--rule);
+}
+.notebook-controls button {
+  min-height: 44px;
+  padding: .35rem .8rem;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--white);
+  color: var(--accent);
+  font: inherit;
+  font-size: .9rem;
+  cursor: pointer;
+}
+.notebook-controls button:hover { background: var(--cloud); }
+.notebook-controls button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .notebook-tree, .notebook-branches { margin: 0; padding: 0; list-style: none; }
 .notebook-tree > li + li { border-block-start: 1px solid var(--rule); }
 .notebook-node > summary {
